@@ -20,22 +20,27 @@ This project is a vim rewrite of the following projects:
 ## Features
 
 - Direct integration with Anthropic API
-- Streaming responses
-- Normal mode and Visual mode
-- Cancel responses with Escape key
 - Supports Claude 3 models
+- Streaming responses
+- Normal mode and Visual mode prompting
+- Cancel responses with Escape key
+- Customizable API configurations (in vimrc and at runtime)
+- Manage context files to prepend to every prompt
+- WIP: Images as context
+- WIP: PDFs as context
 - WIP: Context caching for efficient API usage
+- TBC: Support for other APIs
 
 ## Usage (with default mappings)
 
-1. Normal Mode:
+**1. Normal Mode:**
 - Press `<Leader>c` to send everything from the start of the document to the cursor
 
-2. Visual Mode:
+**2. Visual Mode:**
 - Select text (using v, V, or Ctrl-V)
 - Press `<Leader>c` to send only the selected text
 
-3. To cancel a response:
+**3. To cancel a response:**
 - Press `Esc` while claudia is responding
 
 ## Adding Context
@@ -85,11 +90,11 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 ```vim
 " Normal mode - uses text from start (of buffer) to cursor
 nmap <silent> <Leader>c <Plug>ClaudiaTrigger
-" This is NOT mapped out of the box if your normal mode <Leader>c is already in use
+" This is NOT mapped out of the box if your Normal mode <Leader>c is already in use
 
 " Visual mode - uses selected text
 xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
-" This is NOT mapped out of the box if your visual mode <Leader>c is already in use
+" This is NOT mapped out of the box if your Visual mode <Leader>c is already in use
 
 " API configurations
 let g:claudia_user_config = {
@@ -111,6 +116,3 @@ let g:claudia_user_config = {
 :ClaudiaResetConfig
 :ClaudiaShowConfig
 ```
-## License
-
-MIT License
