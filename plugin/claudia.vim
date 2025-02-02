@@ -196,11 +196,23 @@ function! StreamLLMResponse(...) abort
     let l:options = extend(copy(l:defaults), l:opts)
 
     let l:prompt = GetVisualSelection()
-    if empty(l:prompt)
+    let l:is_visual = !empty(l:prompt)
+    if !l:is_visual
         let l:prompt = GetLinesUntilCursor()
     endif
 
     let l:system_prompt = get(l:options, 'system_prompt', 'You are a helpful assistant.')
+
+    " Handle newline insertion based on mode
+    if l:is_visual
+        let l:end_line = line("'>")
+        execute "normal! \<Esc>"
+        call setline(l:end_line + 1, [''])
+        execute "normal! " . (l:end_line + 1) . "G"
+    else
+        call append('.', '')
+        normal! j
+    endif
 
     let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
 
@@ -250,11 +262,22 @@ function! StreamLLMResponseWithContext(context_file, ...) abort
     let l:options.cache_content = l:context_content
 
     let l:prompt = GetVisualSelection()
-    if empty(l:prompt)
+    let l:is_visual = !empty(l:prompt)
+    if !l:is_visual
         let l:prompt = GetLinesUntilCursor()
     endif
 
     let l:system_prompt = get(l:options, 'system_prompt', 'You are a helpful assistant.')
+
+    " Handle newline insertion based on mode
+    if l:is_visual
+        let l:end_line = GetVisualEndLine()
+        call append(l:end_line, '')
+        call cursor(l:end_line + 1, 1)
+    else
+        call append('.', '')
+        normal! j
+    endif
 
     let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
 
