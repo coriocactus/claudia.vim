@@ -187,7 +187,8 @@ function! StreamLLMResponse(...) abort
     let l:defaults = {
         \ 'url': 'https://api.anthropic.com/v1/messages',
         \ 'api_key_name': 'ANTHROPIC_API_KEY',
-        \ 'model': 'claude-3-5-sonnet-20241022'
+        \ 'model': 'claude-3-5-sonnet-20241022',
+        \ 'system_prompt': 'You are a helpful assistant.',
         \ }
 
     " Get user options (if any)
@@ -195,13 +196,20 @@ function! StreamLLMResponse(...) abort
     " Merge with defaults
     let l:options = extend(copy(l:defaults), l:opts)
 
-    let l:prompt = GetVisualSelection()
-    let l:is_visual = !empty(l:prompt)
-    if !l:is_visual
+    " Store visual selection info before clearing it
+    let l:is_visual = visualmode() !=# ''
+    let l:prompt = ''
+    
+    if l:is_visual
+        let l:end_line = line("'>")
+        let l:prompt = GetVisualSelection()
+        " Immediately clear visual mode to prevent re-triggering
+        execute "normal! \<Esc>"
+    else
         let l:prompt = GetLinesUntilCursor()
     endif
 
-    let l:system_prompt = get(l:options, 'system_prompt', 'You are a helpful assistant.')
+    let l:system_prompt = get(l:options, 'system_prompt')
 
     " Handle newline insertion based on mode
     if l:is_visual
@@ -209,71 +217,6 @@ function! StreamLLMResponse(...) abort
         execute "normal! \<Esc>"
         call setline(l:end_line + 1, [''])
         execute "normal! " . (l:end_line + 1) . "G"
-    else
-        call append('.', '')
-        normal! j
-    endif
-
-    let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
-
-    " Build curl command
-    let l:curl_cmd = 'curl -N -s --no-buffer'
-    for l:arg in l:args
-        let l:curl_cmd .= ' ' . shellescape(l:arg)
-    endfor
-
-    " Execute curl in background
-    let s:active_job = job_start(['/bin/sh', '-c', l:curl_cmd], {
-        \ 'out_cb': 'JobOutCallback',
-        \ 'err_cb': 'JobErrCallback',
-        \ 'exit_cb': 'JobExitCallback',
-        \ 'mode': 'raw'
-        \ })
-
-    " Allow cancellation with Escape
-    nnoremap <silent> <Esc> :call CancelJob()<CR>
-endfunction
-
-function! StreamLLMResponseWithContext(context_file, ...) abort
-    let l:defaults = {
-        \ 'url': 'https://api.anthropic.com/v1/messages',
-        \ 'api_key_name': 'ANTHROPIC_API_KEY',
-        \ 'model': 'claude-3-5-sonnet-20241022'
-        \ }
-
-    " Get user options (if any)
-    let l:opts = a:0 > 0 ? a:1 : {}
-    " Merge with defaults
-    let l:options = extend(copy(l:defaults), l:opts)
-
-    " Expand home directory if path starts with ~
-    let l:expanded_path = expand(a:context_file)
-    
-    " Load the context file content
-    let l:context_content = LoadFile(l:expanded_path)
-    if empty(l:context_content)
-        echohl ErrorMsg
-        echo "Could not load context file: " . l:expanded_path
-        echohl None
-        return
-    endif
-
-    " Add the context content to options
-    let l:options.cache_content = l:context_content
-
-    let l:prompt = GetVisualSelection()
-    let l:is_visual = !empty(l:prompt)
-    if !l:is_visual
-        let l:prompt = GetLinesUntilCursor()
-    endif
-
-    let l:system_prompt = get(l:options, 'system_prompt', 'You are a helpful assistant.')
-
-    " Handle newline insertion based on mode
-    if l:is_visual
-        let l:end_line = GetVisualEndLine()
-        call append(l:end_line, '')
-        call cursor(l:end_line + 1, 1)
     else
         call append('.', '')
         normal! j
