@@ -29,6 +29,10 @@ let s:current_thinking_word = ''
 let s:response_started = 0
 let s:original_cursor_pos = []
 
+" Context management state
+let s:context_entries = []
+let s:next_context_id = 1
+
 " Reset function for global state
 function! ResetGlobalState() abort
     let s:active_job = v:null
@@ -37,6 +41,7 @@ function! ResetGlobalState() abort
     let s:current_thinking_word = ''
     let s:response_started = 0
     let s:original_cursor_pos = []
+    " Don't reset context entries here as they should persist
 endfunction
 
 " Configuration Management Functions
@@ -47,11 +52,11 @@ function! s:InitializeConfig() abort
 endfunction
 
 function! s:ShowConfig() abort
-    echo printf("%-15s %s", "Model:", g:claudia_config.model)
-    echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
-    echo printf("%-15s %d", "Max Tokens:", g:claudia_config.max_tokens)
-    echo printf("%-15s %s", "System Prompt:", g:claudia_config.system_prompt)
     echo printf("%-15s %s", "URL:", g:claudia_config.url)
+    echo printf("%-15s %s", "Model:", g:claudia_config.model)
+    echo printf("%-15s %s", "System Prompt:", g:claudia_config.system_prompt)
+    echo printf("%-15s %d", "Max Tokens:", g:claudia_config.max_tokens)
+    echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
 endfunction
 
 function! s:SetTemperature(temp) abort
@@ -82,6 +87,69 @@ endfunction
 function! s:SetModel(model) abort
     let g:claudia_config.model = a:model
     echo "claudia model set to " . a:model
+endfunction
+
+" Context Management Functions
+function! s:AddContext(filepath) abort
+    " Expand filepath to handle ~ and environment variables
+    let l:expanded_path = expand(a:filepath)
+
+    " Validate file exists
+    if !filereadable(l:expanded_path)
+        echoerr "File not readable: " . l:expanded_path
+        return
+    endif
+
+    " Add new context entry - store both original and expanded path
+    let l:entry = {
+        \ 'id': s:next_context_id,
+        \ 'filepath': a:filepath,
+        \ 'expanded_path': l:expanded_path
+        \ }
+    call add(s:context_entries, l:entry)
+
+    " Increment ID counter
+    let s:next_context_id += 1
+
+    echo "Added context from " . a:filepath . " with ID " . (s:next_context_id - 1)
+endfunction
+
+function! s:ShowContext() abort
+    if empty(s:context_entries)
+        echo "No context entries"
+        return
+    endif
+
+    echo "Context Entries:"
+    for entry in s:context_entries
+        echo printf("ID: %d, File: %s", entry.id, entry.filepath)
+    endfor
+endfunction
+
+function! s:RemoveContext(id) abort
+    let l:id = str2nr(a:id)
+    let l:index = -1
+
+    " Find entry with matching ID
+    for i in range(len(s:context_entries))
+        if s:context_entries[i].id == l:id
+            let l:index = i
+            break
+        endif
+    endfor
+
+    if l:index >= 0
+        call remove(s:context_entries, l:index)
+        echo "Removed context with ID " . l:id
+    else
+        echoerr "No context found with ID " . l:id
+    endif
+endfunction
+
+function! s:ClearContext() abort
+    let s:context_entries = []
+    let s:next_context_id = 1
+    echo "Cleared all context entries"
 endfunction
 
 " Core Plugin Functions
@@ -222,7 +290,6 @@ function! WriteStringAtCursor(str) abort
 endfunction
 
 function! MakeAnthropicCurlArgs(prompt) abort
-    " Use configuration from g:claudia_config
     let l:api_key = $ANTHROPIC_API_KEY
 
     " Prepare system blocks
@@ -232,8 +299,28 @@ function! MakeAnthropicCurlArgs(prompt) abort
         \ 'text': g:claudia_config.system_prompt
         \ })
 
+    " Prepare content blocks
+    let l:content_blocks = []
+
+    " Add context blocks first
+    for entry in s:context_entries
+        let l:context_text = LoadFile(entry.expanded_path)
+        if !empty(l:context_text)
+            call add(l:content_blocks, {
+                \ 'type': 'text',
+                \ 'text': l:context_text
+                \ })
+        endif
+    endfor
+
+    " Add user prompt last
+    call add(l:content_blocks, {
+        \ 'type': 'text',
+        \ 'text': a:prompt
+        \ })
+
     let l:data = {
-        \ 'messages': [{'role': 'user', 'content': a:prompt}],
+        \ 'messages': [{'role': 'user', 'content': l:content_blocks}],
         \ 'model': g:claudia_config.model,
         \ 'stream': v:true,
         \ 'max_tokens': g:claudia_config.max_tokens,
@@ -257,6 +344,34 @@ function! MakeAnthropicCurlArgs(prompt) abort
     " Add URL from config
     call add(l:args, g:claudia_config.url)
     return l:args
+endfunction
+
+function! JobOutCallback(channel, msg)
+    call HandleAnthropicData(a:msg, 'content_block_delta')
+endfunction
+
+function! JobErrCallback(channel, msg)
+endfunction
+
+function! JobExitCallback(job, status)
+    let s:active_job = v:null
+    if hasmapto('CancelJob')
+        silent! nunmap <Esc>
+    endif
+    call ResetGlobalState()
+endfunction
+
+function! CancelJob()
+    if exists('s:active_job') && s:active_job != v:null
+        call job_stop(s:active_job)
+        let s:active_job = v:null
+        if hasmapto('CancelJob')
+            silent! nunmap <Esc>
+        endif
+        " Stop thinking animation
+        call StopThinkingAnimation()
+        call ResetGlobalState()
+    endif
 endfunction
 
 function! HandleAnthropicData(data, event_state) abort
@@ -292,34 +407,6 @@ function! HandleAnthropicData(data, event_state) abort
         catch
         endtry
     endfor
-endfunction
-
-function! JobOutCallback(channel, msg)
-    call HandleAnthropicData(a:msg, 'content_block_delta')
-endfunction
-
-function! JobErrCallback(channel, msg)
-endfunction
-
-function! JobExitCallback(job, status)
-    let s:active_job = v:null
-    if hasmapto('CancelJob')
-        silent! nunmap <Esc>
-    endif
-    call ResetGlobalState()
-endfunction
-
-function! CancelJob()
-    if exists('s:active_job') && s:active_job != v:null
-        call job_stop(s:active_job)
-        let s:active_job = v:null
-        if hasmapto('CancelJob')
-            silent! nunmap <Esc>
-        endif
-        " Stop thinking animation
-        call StopThinkingAnimation()
-        call ResetGlobalState()
-    endif
 endfunction
 
 function! s:TriggerClaudia() abort
@@ -372,6 +459,12 @@ command! -nargs=1 ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
 command! -nargs=1 ClaudiaModel call s:SetModel(<q-args>)
 command! ClaudiaShowConfig call s:ShowConfig()
 command! ClaudiaResetConfig call s:InitializeConfig()
+
+" Context management commands
+command! -nargs=1 -complete=file ClaudiaAddContext call s:AddContext(<q-args>)
+command! ClaudiaShowContext call s:ShowContext()
+command! -nargs=1 ClaudiaRemoveContext call s:RemoveContext(<q-args>)
+command! ClaudiaClearContext call s:ClearContext()
 
 " Plugin mappings
 if !hasmapto('<Plug>ClaudiaTrigger') && empty(maparg('<Leader>c', 'n'))

@@ -1,6 +1,7 @@
 # claudia.vim
 
-Interact with Anthropic's API directly in Vim. Send text and get streaming responses right where you're typing.
+Interact with Anthropic's API directly in Vim.
+Send text and get streaming responses right where you're typing.
 
 ## Why
 
@@ -28,15 +29,33 @@ This project is a vim rewrite of the following projects:
 ## Usage (with default mappings)
 
 1. Normal Mode:
-   - Type your prompt
-   - Press `<Leader>c` to send everything from the start of the document to the cursor
+- Press `<Leader>c` to send everything from the start of the document to the cursor
 
 2. Visual Mode:
-   - Select text (using v, V, or Ctrl-V)
-   - Press `<Leader>c` to send only the selected text
+- Select text (using v, V, or Ctrl-V)
+- Press `<Leader>c` to send only the selected text
 
 3. To cancel a response:
-   - Press `Esc` while claudia is responding
+- Press `Esc` while claudia is responding
+
+## Adding Context
+
+You can add file contents as context that will be prepended to every prompt:
+
+1. Add context files:
+```vim
+:ClaudiaAddContext ~/path/to/context.txt    " Add a file as context
+:ClaudiaAddContext $PROJECT/app/Main.hs     " Environment variables work
+```
+2. Manage context:
+```vim
+:ClaudiaShowContext     " List all context files and their IDs
+:ClaudiaRemoveContext 2 " Remove context with ID 2
+:ClaudiaRemoveContext 3 " Remove context with ID 3
+:ClaudiaClearContext    " Remove all context files
+```
+Context files persist across queries but reset when Vim restarts.
+Files are read fresh on each query, so edits to context files take effect immediately.
 
 ## Requirements
 
