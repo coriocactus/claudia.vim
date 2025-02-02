@@ -9,6 +9,13 @@ function! GetApiKey(name) abort
     return $ANTHROPIC_API_KEY
 endfunction
 
+function! LoadFile(file_path) abort
+    if filereadable(a:file_path)
+        return join(readfile(a:file_path), "\n")
+    endif
+    return ''
+endfunction
+
 function! GetLinesUntilCursor() abort
     let l:current_line = line('.')
     let l:lines = getline(1, l:current_line)
@@ -40,11 +47,30 @@ function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
     let l:url = a:opts.url
     let l:api_key = $ANTHROPIC_API_KEY
 
+    " Prepare system blocks with caching
+    let l:system_blocks = []
+    
+    " Add base system prompt
+    call add(l:system_blocks, {
+        \ 'type': 'text',
+        \ 'text': a:system_prompt
+        \ })
+
+    " Add cached content if provided
+    if has_key(a:opts, 'cache_content')
+        call add(l:system_blocks, {
+            \ 'type': 'text',
+            \ 'text': a:opts.cache_content,
+            \ 'cache_control': {'type': 'ephemeral'}
+            \ })
+    endif
+
     let l:data = {
         \ 'messages': [{'role': 'user', 'content': a:prompt}],
         \ 'model': a:opts.model,
         \ 'stream': v:true,
-        \ 'max_tokens': 4096
+        \ 'max_tokens': 4096,
+        \ 'system': l:system_blocks
         \ }
 
     let l:args = ['-N', '-X', 'POST', '-H', 'Content-Type: application/json']
@@ -168,6 +194,60 @@ function! StreamLLMResponse(...) abort
     let l:opts = a:0 > 0 ? a:1 : {}
     " Merge with defaults
     let l:options = extend(copy(l:defaults), l:opts)
+
+    let l:prompt = GetVisualSelection()
+    if empty(l:prompt)
+        let l:prompt = GetLinesUntilCursor()
+    endif
+
+    let l:system_prompt = get(l:options, 'system_prompt', 'You are a helpful assistant.')
+
+    let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
+
+    " Build curl command
+    let l:curl_cmd = 'curl -N -s --no-buffer'
+    for l:arg in l:args
+        let l:curl_cmd .= ' ' . shellescape(l:arg)
+    endfor
+
+    " Execute curl in background
+    let s:active_job = job_start(['/bin/sh', '-c', l:curl_cmd], {
+        \ 'out_cb': 'JobOutCallback',
+        \ 'err_cb': 'JobErrCallback',
+        \ 'exit_cb': 'JobExitCallback',
+        \ 'mode': 'raw'
+        \ })
+
+    " Allow cancellation with Escape
+    nnoremap <silent> <Esc> :call CancelJob()<CR>
+endfunction
+
+function! StreamLLMResponseWithContext(context_file, ...) abort
+    let l:defaults = {
+        \ 'url': 'https://api.anthropic.com/v1/messages',
+        \ 'api_key_name': 'ANTHROPIC_API_KEY',
+        \ 'model': 'claude-3-5-sonnet-20241022'
+        \ }
+
+    " Get user options (if any)
+    let l:opts = a:0 > 0 ? a:1 : {}
+    " Merge with defaults
+    let l:options = extend(copy(l:defaults), l:opts)
+
+    " Expand home directory if path starts with ~
+    let l:expanded_path = expand(a:context_file)
+    
+    " Load the context file content
+    let l:context_content = LoadFile(l:expanded_path)
+    if empty(l:context_content)
+        echohl ErrorMsg
+        echo "Could not load context file: " . l:expanded_path
+        echohl None
+        return
+    endif
+
+    " Add the context content to options
+    let l:options.cache_content = l:context_content
 
     let l:prompt = GetVisualSelection()
     if empty(l:prompt)
