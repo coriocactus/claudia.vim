@@ -4,6 +4,16 @@ set cpo&vim
 
 " Global state
 let s:active_job = v:null
+let s:thinking_timer = v:null
+let s:thinking_states = [
+            \ 'What does the stochastic parrot want to hear',
+            \ 'Hallucinating so they can be God in their own head',
+            \ 'Just predicting some tokens in 4294967296-dimensional probabilistic space',
+            \ 'Unintentionally doing what they cannot do intentionally',
+            \ 'Regurgitating training data for the specific problem that I was trained to solve',
+            \ ]
+let s:dots_state = 0
+let s:current_thinking_word = ''
 
 function! GetApiKey(name) abort
     return $ANTHROPIC_API_KEY
@@ -41,6 +51,95 @@ function! GetVisualSelection() abort
     endif
 
     return join(l:lines, "\n")
+endfunction
+
+function! AnimateThinking(timer) abort
+    " Don't animate if response has started
+    if s:response_started
+        call StopThinkingAnimation()
+        return
+    endif
+
+    if s:active_job == v:null
+        call StopThinkingAnimation()
+        return
+    endif
+
+    " Update dots animation
+    let s:dots_state = (s:dots_state + 1) % 4
+    let l:dots = repeat('.', s:dots_state)
+
+    " Get current line
+    let l:current_line = getline('.')
+    " Remove previous thinking text if it exists
+    let l:cleaned_line = substitute(l:current_line, s:current_thinking_word . '\.*$', '', '')
+    " Add new thinking text
+    let l:new_line = l:cleaned_line . s:current_thinking_word . l:dots
+    call setline('.', l:new_line)
+    redraw
+endfunction
+
+function! StartThinkingAnimation() abort
+    let s:response_started = 0  " Reset response flag
+    " Randomly select a thinking word
+    let l:rand_index = rand() % len(s:thinking_states)
+    let s:current_thinking_word = s:thinking_states[l:rand_index]
+
+    " Start timer for animation
+    let s:thinking_timer = timer_start(300, 'AnimateThinking', {'repeat': -1})
+endfunction
+
+function! StopThinkingAnimation() abort
+    if s:thinking_timer != v:null
+        call timer_stop(s:thinking_timer)
+        let s:thinking_timer = v:null
+        " Clean up thinking text
+        let l:current_line = getline('.')
+        let l:cleaned_line = substitute(l:current_line, s:current_thinking_word . '\.*$', '', '')
+        call setline('.', l:cleaned_line)
+    endif
+endfunction
+
+function! WriteStringAtCursor(str) abort
+    " If this is the first write, clean up thinking animation and prepare new line
+    if !s:response_started
+        let s:response_started = 1  " Mark that response has started
+        call StopThinkingAnimation()
+        " Move to next line to start the actual response
+        call append('.', '')
+        normal! j
+    endif
+
+    " First normalize all line endings
+    let l:normalized = substitute(a:str, '\r\n\|\r\|\n', '\n', 'g')
+
+    " Replace invisible space characters with regular spaces
+    let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
+
+    " Fix specific code patterns
+    let l:normalized = substitute(l:normalized, 'class\s*\([A-Za-z0-9_]\+\)', 'class \1', 'g')
+    let l:normalized = substitute(l:normalized, 'def\s*\([A-Za-z0-9_]\+\)', 'def \1', 'g')
+
+    " Split into lines, preserving empty lines
+    let l:lines = split(l:normalized, '\n', 1)
+
+    let l:pos = getpos('.')
+
+    " Handle first line
+    let l:current_line = getline('.')
+    call setline('.', l:current_line . l:lines[0])
+
+    " Add remaining lines
+    if len(l:lines) > 1
+        call append('.', l:lines[1:])
+    endif
+
+    " Update cursor position
+    let l:new_pos = [l:pos[0], l:pos[1] + len(l:lines) - 1, l:pos[2] + len(l:lines[-1]), l:pos[3]]
+    call setpos('.', l:new_pos)
+
+    " Force redraw
+    redraw
 endfunction
 
 function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
@@ -90,39 +189,6 @@ function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
     " Add URL last
     call add(l:args, l:url)
     return l:args
-endfunction
-
-function! WriteStringAtCursor(str) abort
-    " First normalize all line endings
-    let l:normalized = substitute(a:str, '\r\n\|\r\|\n', '\n', 'g')
-
-    " Replace invisible space characters with regular spaces
-    let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
-
-    " Fix specific code patterns
-    let l:normalized = substitute(l:normalized, 'class\s*\([A-Za-z0-9_]\+\)', 'class \1', 'g')
-    let l:normalized = substitute(l:normalized, 'def\s*\([A-Za-z0-9_]\+\)', 'def \1', 'g')
-
-    " Split into lines, preserving empty lines
-    let l:lines = split(l:normalized, '\n', 1)
-
-    let l:pos = getpos('.')
-
-    " Handle first line
-    let l:current_line = getline('.')
-    call setline('.', l:current_line . l:lines[0])
-
-    " Add remaining lines
-    if len(l:lines) > 1
-        call append('.', l:lines[1:])
-    endif
-
-    " Update cursor position
-    let l:new_pos = [l:pos[0], l:pos[1] + len(l:lines) - 1, l:pos[2] + len(l:lines[-1]), l:pos[3]]
-    call setpos('.', l:new_pos)
-
-    " Force redraw
-    redraw
 endfunction
 
 function! HandleAnthropicData(data, event_state) abort
@@ -181,6 +247,9 @@ function! CancelJob()
         if hasmapto('CancelJob')
             silent! nunmap <Esc>
         endif
+        " Stop thinking animation
+        call StopThinkingAnimation()
+        let s:response_started = 0  " Reset response flag
     endif
 endfunction
 
@@ -212,6 +281,9 @@ function! StreamLLMResponse(...) abort
         call append('.', '')
         normal! j
     endif
+
+    " Start thinking animation before making API call
+    call StartThinkingAnimation()
 
     let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
 

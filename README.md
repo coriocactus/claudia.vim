@@ -22,7 +22,6 @@ This project is a vim rewrite of the following projects:
 - Normal mode and Visual mode
 - Cancel responses with Escape key
 - Supports Claude 3 models
-- WIP: Indicator for when Claude is "thinking"
 - WIP: Context caching for efficient API usage
 
 ## Usage (with example mappings)
