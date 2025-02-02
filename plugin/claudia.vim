@@ -195,6 +195,7 @@ function! StreamLLMResponse(...) abort
     let l:opts = a:0 > 0 ? a:1 : {}
     " Merge with defaults
     let l:options = extend(copy(l:defaults), l:opts)
+    let l:system_prompt = get(l:options, 'system_prompt')
 
     " Store visual selection info before clearing it
     let l:is_visual = visualmode() !=# ''
@@ -208,8 +209,6 @@ function! StreamLLMResponse(...) abort
     else
         let l:prompt = GetLinesUntilCursor()
     endif
-
-    let l:system_prompt = get(l:options, 'system_prompt')
 
     " Handle newline insertion based on mode
     if l:is_visual
