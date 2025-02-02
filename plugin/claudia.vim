@@ -49,7 +49,7 @@ function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
 
     " Prepare system blocks with caching
     let l:system_blocks = []
-    
+
     " Add base system prompt
     call add(l:system_blocks, {
         \ 'type': 'text',
@@ -69,7 +69,8 @@ function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
         \ 'messages': [{'role': 'user', 'content': a:prompt}],
         \ 'model': a:opts.model,
         \ 'stream': v:true,
-        \ 'max_tokens': 4096,
+        \ 'max_tokens': a:opts.max_tokens,
+        \ 'temperature': a:opts.temperature,
         \ 'system': l:system_blocks
         \ }
 
@@ -94,32 +95,32 @@ endfunction
 function! WriteStringAtCursor(str) abort
     " First normalize all line endings
     let l:normalized = substitute(a:str, '\r\n\|\r\|\n', '\n', 'g')
-    
+
     " Replace invisible space characters with regular spaces
     let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
-    
+
     " Fix specific code patterns
     let l:normalized = substitute(l:normalized, 'class\s*\([A-Za-z0-9_]\+\)', 'class \1', 'g')
     let l:normalized = substitute(l:normalized, 'def\s*\([A-Za-z0-9_]\+\)', 'def \1', 'g')
-    
+
     " Split into lines, preserving empty lines
     let l:lines = split(l:normalized, '\n', 1)
-    
+
     let l:pos = getpos('.')
-    
+
     " Handle first line
     let l:current_line = getline('.')
     call setline('.', l:current_line . l:lines[0])
-    
+
     " Add remaining lines
     if len(l:lines) > 1
         call append('.', l:lines[1:])
     endif
-    
+
     " Update cursor position
     let l:new_pos = [l:pos[0], l:pos[1] + len(l:lines) - 1, l:pos[2] + len(l:lines[-1]), l:pos[3]]
     call setpos('.', l:new_pos)
-    
+
     " Force redraw
     redraw
 endfunction
@@ -189,6 +190,8 @@ function! StreamLLMResponse(...) abort
         \ 'api_key_name': 'ANTHROPIC_API_KEY',
         \ 'model': 'claude-3-5-sonnet-20241022',
         \ 'system_prompt': 'You are a helpful assistant.',
+        \ 'max_tokens': 4096,
+        \ 'temperature': 0.25,
         \ }
 
     " Get user options (if any)
@@ -197,26 +200,15 @@ function! StreamLLMResponse(...) abort
     let l:options = extend(copy(l:defaults), l:opts)
     let l:system_prompt = get(l:options, 'system_prompt')
 
-    " Store visual selection info before clearing it
-    let l:is_visual = visualmode() !=# ''
-    let l:prompt = ''
-    
-    if l:is_visual
-        let l:end_line = line("'>")
-        let l:prompt = GetVisualSelection()
-        " Immediately clear visual mode to prevent re-triggering
-        execute "normal! \<Esc>"
-    else
-        let l:prompt = GetLinesUntilCursor()
-    endif
-
     " Handle newline insertion based on mode
-    if l:is_visual
+    let l:prompt = GetVisualSelection()
+    if !empty(l:prompt)
         let l:end_line = line("'>")
         execute "normal! \<Esc>"
         call setline(l:end_line + 1, [''])
         execute "normal! " . (l:end_line + 1) . "G"
     else
+        let l:prompt = GetLinesUntilCursor()
         call append('.', '')
         normal! j
     endif
