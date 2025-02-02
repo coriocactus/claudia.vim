@@ -14,6 +14,17 @@ let s:thinking_states = [
             \ ]
 let s:dots_state = 0
 let s:current_thinking_word = ''
+let s:response_started = 0
+let s:original_cursor_pos = []
+
+function! ResetGlobalState() abort
+    let s:active_job = v:null
+    let s:thinking_timer = v:null
+    let s:dots_state = 0
+    let s:current_thinking_word = ''
+    let s:response_started = 0
+    let s:original_cursor_pos = []
+endfunction
 
 function! GetApiKey(name) abort
     return $ANTHROPIC_API_KEY
@@ -105,6 +116,12 @@ function! WriteStringAtCursor(str) abort
     if !s:response_started
         let s:response_started = 1  " Mark that response has started
         call StopThinkingAnimation()
+
+        " Store original cursor position if not already stored
+        if empty(s:original_cursor_pos)
+            let s:original_cursor_pos = getpos('.')
+        endif
+
         " Move to next line to start the actual response
         call append('.', '')
         normal! j
@@ -123,7 +140,9 @@ function! WriteStringAtCursor(str) abort
     " Split into lines, preserving empty lines
     let l:lines = split(l:normalized, '\n', 1)
 
-    let l:pos = getpos('.')
+    " Get current position relative to original cursor position
+    let l:current_pos = getpos('.')
+    let l:line_offset = l:current_pos[1] - s:original_cursor_pos[1]
 
     " Handle first line
     let l:current_line = getline('.')
@@ -134,9 +153,10 @@ function! WriteStringAtCursor(str) abort
         call append('.', l:lines[1:])
     endif
 
-    " Update cursor position
-    let l:new_pos = [l:pos[0], l:pos[1] + len(l:lines) - 1, l:pos[2] + len(l:lines[-1]), l:pos[3]]
-    call setpos('.', l:new_pos)
+    " Calculate new cursor position
+    let l:new_line = s:original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
+    let l:new_col = len(getline(l:new_line))
+    call cursor(l:new_line, l:new_col)
 
     " Force redraw
     redraw
@@ -238,6 +258,7 @@ function! JobExitCallback(job, status)
     if hasmapto('CancelJob')
         silent! nunmap <Esc>
     endif
+    call ResetGlobalState()
 endfunction
 
 function! CancelJob()
@@ -249,11 +270,17 @@ function! CancelJob()
         endif
         " Stop thinking animation
         call StopThinkingAnimation()
-        let s:response_started = 0  " Reset response flag
+        call ResetGlobalState()
     endif
 endfunction
 
 function! StreamLLMResponse(...) abort
+    " Reset global state before starting new response
+    call ResetGlobalState()
+
+    " Store initial cursor position
+    let s:original_cursor_pos = getpos('.')
+
     let l:defaults = {
         \ 'url': 'https://api.anthropic.com/v1/messages',
         \ 'api_key_name': 'ANTHROPIC_API_KEY',
