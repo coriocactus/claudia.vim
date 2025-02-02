@@ -3,11 +3,12 @@
 Interact with Anthropic's API directly in Vim. Send text and get streaming responses right where you're typing.
 
 ## Why
-- It's the age of the [terminal](https://github.com/ghostty-org/ghostty)
-- AIs don't need breaks. Say no to "message limits"
-- Keep your API key away from the browser
-- As much AI with as little config as possible
-- Pay only for intelligence, not the messenger
+
+- It's the age of the [terminal](https://github.com/ghostty-org/ghostty).
+- AIs don’t need breaks--say no to "message limits."
+- Keep API keys out of the browser.
+- Maximum AI, minimal config.
+- Pay for intelligence, not the messenger.
 
 ## Credit
 
