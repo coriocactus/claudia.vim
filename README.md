@@ -63,19 +63,19 @@ Files are read fresh on each query, so edits to context files take effect immedi
 - curl installed on your system
 - Anthropic API key
 
-## Installation
+## Getting Started
 
-### vim-plug
+### Step 1 Option 1: vim-plug (or your preferred plugin manager)
 ```vim
 Plug 'cordcivilian/claudia.vim'
 ```
-### Manual Installation
+### Step 1 Option 2: Manual Installation
 ```bash
 mkdir -p ~/.vim/pack/plugins/start
 cd ~/.vim/pack/plugins/start
 git clone https://github.com/cordcivilian/claudia.vim.git
 ```
-## API Key Setup
+### Step 2: API Key Setup
 ```bash
 export ANTHROPIC_API_KEY="your-api-key-here"
 ```
@@ -85,9 +85,11 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 ```vim
 " Normal mode - uses text from start (of buffer) to cursor
 nmap <silent> <Leader>c <Plug>ClaudiaTrigger
+" This is NOT mapped out of the box if your normal mode <Leader>c is already in use
 
 " Visual mode - uses selected text
 xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
+" This is NOT mapped out of the box if your visual mode <Leader>c is already in use
 
 " API configurations
 let g:claudia_user_config = {
