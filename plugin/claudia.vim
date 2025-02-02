@@ -2,6 +2,18 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
+" Global configuration dictionary - Must be defined before global state
+if !exists('g:claudia_config')
+    let g:claudia_config = {
+        \ 'url': 'https://api.anthropic.com/v1/messages',
+        \ 'api_key_name': 'ANTHROPIC_API_KEY',
+        \ 'model': 'claude-3-5-sonnet-20241022',
+        \ 'system_prompt': 'You are a helpful assistant.',
+        \ 'max_tokens': 4096,
+        \ 'temperature': 0.25,
+        \ }
+endif
+
 " Global state
 let s:active_job = v:null
 let s:thinking_timer = v:null
@@ -17,6 +29,7 @@ let s:current_thinking_word = ''
 let s:response_started = 0
 let s:original_cursor_pos = []
 
+" Reset function for global state
 function! ResetGlobalState() abort
     let s:active_job = v:null
     let s:thinking_timer = v:null
@@ -26,6 +39,52 @@ function! ResetGlobalState() abort
     let s:original_cursor_pos = []
 endfunction
 
+" Configuration Management Functions
+function! s:InitializeConfig() abort
+    " Allow user to override defaults in their vimrc
+    let l:user_config = get(g:, 'claudia_user_config', {})
+    let g:claudia_config = extend(copy(g:claudia_config), l:user_config)
+endfunction
+
+function! s:ShowConfig() abort
+    echo printf("%-15s %s", "Model:", g:claudia_config.model)
+    echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
+    echo printf("%-15s %d", "Max Tokens:", g:claudia_config.max_tokens)
+    echo printf("%-15s %s", "System Prompt:", g:claudia_config.system_prompt)
+    echo printf("%-15s %s", "URL:", g:claudia_config.url)
+endfunction
+
+function! s:SetTemperature(temp) abort
+    let l:temp_float = str2float(a:temp)
+    if l:temp_float >= 0.0 && l:temp_float <= 1.0
+        let g:claudia_config.temperature = l:temp_float
+        echo "claudia temperature set to " . a:temp
+    else
+        echoerr "Temperature must be between 0.0 and 1.0"
+    endif
+endfunction
+
+function! s:SetMaxTokens(tokens) abort
+    let l:tokens_nr = str2nr(a:tokens)
+    if l:tokens_nr > 0
+        let g:claudia_config.max_tokens = l:tokens_nr
+        echo "claudia max tokens set to " . a:tokens
+    else
+        echoerr "Max tokens must be a positive number"
+    endif
+endfunction
+
+function! s:SetSystemPrompt(prompt) abort
+    let g:claudia_config.system_prompt = a:prompt
+    echo "claudia system prompt updated"
+endfunction
+
+function! s:SetModel(model) abort
+    let g:claudia_config.model = a:model
+    echo "claudia model set to " . a:model
+endfunction
+
+" Core Plugin Functions
 function! GetApiKey(name) abort
     return $ANTHROPIC_API_KEY
 endfunction
@@ -162,34 +221,23 @@ function! WriteStringAtCursor(str) abort
     redraw
 endfunction
 
-function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
-    let l:url = a:opts.url
+function! MakeAnthropicCurlArgs(prompt) abort
+    " Use configuration from g:claudia_config
     let l:api_key = $ANTHROPIC_API_KEY
 
-    " Prepare system blocks with caching
+    " Prepare system blocks
     let l:system_blocks = []
-
-    " Add base system prompt
     call add(l:system_blocks, {
         \ 'type': 'text',
-        \ 'text': a:system_prompt
+        \ 'text': g:claudia_config.system_prompt
         \ })
-
-    " Add cached content if provided
-    if has_key(a:opts, 'cache_content')
-        call add(l:system_blocks, {
-            \ 'type': 'text',
-            \ 'text': a:opts.cache_content,
-            \ 'cache_control': {'type': 'ephemeral'}
-            \ })
-    endif
 
     let l:data = {
         \ 'messages': [{'role': 'user', 'content': a:prompt}],
-        \ 'model': a:opts.model,
+        \ 'model': g:claudia_config.model,
         \ 'stream': v:true,
-        \ 'max_tokens': a:opts.max_tokens,
-        \ 'temperature': a:opts.temperature,
+        \ 'max_tokens': g:claudia_config.max_tokens,
+        \ 'temperature': g:claudia_config.temperature,
         \ 'system': l:system_blocks
         \ }
 
@@ -206,8 +254,8 @@ function! MakeAnthropicCurlArgs(opts, prompt, system_prompt) abort
     call add(l:args, '-d')
     call add(l:args, l:json_data)
 
-    " Add URL last
-    call add(l:args, l:url)
+    " Add URL from config
+    call add(l:args, g:claudia_config.url)
     return l:args
 endfunction
 
@@ -274,27 +322,12 @@ function! CancelJob()
     endif
 endfunction
 
-function! StreamLLMResponse(...) abort
+function! s:TriggerClaudia() abort
     " Reset global state before starting new response
     call ResetGlobalState()
 
     " Store initial cursor position
     let s:original_cursor_pos = getpos('.')
-
-    let l:defaults = {
-        \ 'url': 'https://api.anthropic.com/v1/messages',
-        \ 'api_key_name': 'ANTHROPIC_API_KEY',
-        \ 'model': 'claude-3-5-sonnet-20241022',
-        \ 'system_prompt': 'You are a helpful assistant.',
-        \ 'max_tokens': 4096,
-        \ 'temperature': 0.25,
-        \ }
-
-    " Get user options (if any)
-    let l:opts = a:0 > 0 ? a:1 : {}
-    " Merge with defaults
-    let l:options = extend(copy(l:defaults), l:opts)
-    let l:system_prompt = get(l:options, 'system_prompt')
 
     " Handle newline insertion based on mode
     let l:prompt = GetVisualSelection()
@@ -312,7 +345,7 @@ function! StreamLLMResponse(...) abort
     " Start thinking animation before making API call
     call StartThinkingAnimation()
 
-    let l:args = MakeAnthropicCurlArgs(l:options, l:prompt, l:system_prompt)
+    let l:args = MakeAnthropicCurlArgs(l:prompt)
 
     " Build curl command
     let l:curl_cmd = 'curl -N -s --no-buffer'
@@ -331,6 +364,32 @@ function! StreamLLMResponse(...) abort
     " Allow cancellation with Escape
     nnoremap <silent> <Esc> :call CancelJob()<CR>
 endfunction
+
+" Commands for runtime configuration
+command! -nargs=1 ClaudiaTemp call s:SetTemperature(<q-args>)
+command! -nargs=1 ClaudiaTokens call s:SetMaxTokens(<q-args>)
+command! -nargs=1 ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
+command! -nargs=1 ClaudiaModel call s:SetModel(<q-args>)
+command! ClaudiaShowConfig call s:ShowConfig()
+command! ClaudiaResetConfig call s:InitializeConfig()
+
+" Plugin mappings
+if !hasmapto('<Plug>ClaudiaTrigger') && empty(maparg('<Leader>c', 'n'))
+    nmap <silent> <Leader>c <Plug>ClaudiaTrigger
+endif
+
+if !hasmapto('<Plug>ClaudiaTriggerVisual') && empty(maparg('<Leader>c', 'x'))
+    xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
+endif
+
+nnoremap <silent> <script> <Plug>ClaudiaTrigger <SID>Trigger
+nnoremap <silent> <SID>Trigger :call <SID>TriggerClaudia()<CR>
+
+xnoremap <silent> <script> <Plug>ClaudiaTriggerVisual <SID>TriggerVisual
+xnoremap <silent> <SID>TriggerVisual :<C-u>call <SID>TriggerClaudia()<CR>
+
+" Initialize config on load
+call s:InitializeConfig()
 
 " Restore cpo
 let &cpo = s:save_cpo
