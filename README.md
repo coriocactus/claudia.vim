@@ -20,13 +20,12 @@ This project is a vim rewrite of the following projects:
 ## Features
 
 - Direct integration with Anthropic API (Claude 3 models)
-- Provide context via local file contents [Supported: texts, images, PDFs]
+- Provide context via file contents [Supported: texts, images, PDFs]
 - Normal mode and Visual mode prompting
 - Streaming responses
 - Stop responses with Escape key
 - Customizable API configurations
 - Context caching for fast and efficient API usage
-- WIP: Provide context via remote file contents (curl)
 - WIP: Show exact tokens of current context
 - WIP: Place cursor at position 1 of the line below the end of response
 - WIP: Trim trailing whitespace from responses

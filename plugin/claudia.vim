@@ -211,136 +211,6 @@ function! s:SetModel(model) abort
     echo "claudia model set to " . a:model
 endfunction
 
-" Media Support Functions
-
-" Media type detection
-function! s:GetMediaType(filepath) abort
-    let l:ext = tolower(fnamemodify(a:filepath, ':e'))
-    let l:media_types = {
-                \ 'jpg': 'image/jpeg',
-                \ 'jpeg': 'image/jpeg',
-                \ 'png': 'image/png',
-                \ 'gif': 'image/gif',
-                \ 'webp': 'image/webp',
-                \ 'pdf': 'application/pdf'
-                \ }
-    return get(l:media_types, l:ext, '')
-endfunction
-
-" Progress bar function
-function! s:ShowProgress(current, total) abort
-    let l:width = 40
-    let l:filled = float2nr(round(l:width * a:current / a:total))
-    let l:empty = l:width - l:filled
-    let l:bar = repeat('█', l:filled) . repeat('░', l:empty)
-    redraw
-    echo printf('Converting file: [%s] %d%%', l:bar, float2nr(round(100.0 * a:current / a:total)))
-endfunction
-
-function! s:LoadFileWithProgress(filepath, type) abort
-    call s:DebugLog("Loading file: " . a:filepath . " (type: " . a:type . ")")
-
-    " Recheck file existence
-    if !filereadable(a:filepath)
-        call s:DebugLog("Error: File no longer accessible")
-        throw "File no longer accessible: " . a:filepath
-    endif
-
-    " Get file size
-    let l:size = getfsize(a:filepath)
-    call s:DebugLog("File size: " . l:size . " bytes")
-
-    if a:type ==# 'text'
-        let l:content = join(readfile(a:filepath), "\n")
-        call s:DebugLog("Loaded text file, length: " . len(l:content))
-        return l:content
-    else
-        call s:DebugLog("Starting base64 conversion")
-
-        " Initialize progress
-        call s:ShowProgress(0, 100)
-
-        " Use base64 command with proper options to ensure clean output
-        let l:cmd = 'base64 -w 0 -i ' . shellescape(a:filepath) . ' | tr -d "\n"'
-        call s:DebugLog("Running command: " . l:cmd)
-
-        let l:output = system(l:cmd)
-        let l:status = v:shell_error
-
-        call s:DebugLog("base64 conversion complete, status: " . l:status)
-        call s:DebugLog("base64 output length: " . len(l:output))
-
-        if l:status
-            call s:DebugLog("Error: base64 conversion failed")
-            throw "Failed to convert file: " . a:filepath
-        endif
-
-        " Clear progress display
-        redraw
-        echo ""
-
-        return l:output
-    endif
-endfunction
-
-" Cache management functions
-function! s:CacheContext(id) abort
-    let l:entry = v:null
-
-    " Find context entry
-    for e in s:context_entries
-        if e.id == str2nr(a:id)
-            let l:entry = e
-            break
-        endif
-    endfor
-
-    if l:entry is v:null
-        echoerr "No context found with ID " . a:id
-        return
-    endif
-
-    try
-        echo "Caching content from " . l:entry.filepath . "..."
-        let l:content = s:LoadFileWithProgress(l:entry.expanded_path, l:entry.type)
-        let s:context_cache[a:id] = l:content
-        echo "Successfully cached content from " . l:entry.filepath
-    catch
-        echoerr "Failed to cache content from " . l:entry.filepath . ": " . v:exception
-    endtry
-endfunction
-
-function! s:UncacheContext(id) abort
-    let l:id = str2nr(a:id)
-    let l:filepath = ''
-
-    " Find entry with matching ID and store its filepath
-    for entry in s:context_entries
-        if entry.id == l:id
-            let l:filepath = entry.filepath
-            break
-        endif
-    endfor
-
-    if empty(l:filepath)
-        echoerr "No context found with ID " . l:id
-        return
-    endif
-
-    " Remove from cache if present
-    if has_key(s:context_cache, l:id)
-        unlet s:context_cache[l:id]
-        echo "Uncached context " . l:id . " (" . l:filepath . ")"
-    else
-        echo "Context " . l:id . " (" . l:filepath . ") was not cached"
-    endif
-endfunction
-
-function! s:ClearCache() abort
-    let s:context_cache = {}
-    echo "Cleared context cache"
-endfunction
-
 " Context Management Functions
 function! s:UpdateNextContextId() abort
     " If no contexts exist, reset to 1
@@ -453,6 +323,108 @@ function! s:ClearContext() abort
     let s:next_context_id = 1
     let s:context_cache = {}
     echo "Cleared all context entries and cache"
+endfunction
+
+" File loading function
+function! s:LoadFileWithProgress(filepath, type) abort
+    call s:DebugLog("Loading file: " . a:filepath . " (type: " . a:type . ")")
+
+    " Recheck file existence
+    if !filereadable(a:filepath)
+        call s:DebugLog("Error: File no longer accessible")
+        throw "File no longer accessible: " . a:filepath
+    endif
+
+    " Get file size
+    let l:size = getfsize(a:filepath)
+    call s:DebugLog("File size: " . l:size . " bytes")
+
+    if a:type ==# 'text'
+        let l:content = join(readfile(a:filepath), "\n")
+        call s:DebugLog("Loaded text file, length: " . len(l:content))
+        return l:content
+    else
+        call s:DebugLog("Starting base64 conversion")
+
+        " Use base64 command with proper options to ensure clean output
+        let l:cmd = 'base64 -w 0 -i ' . shellescape(a:filepath) . ' | tr -d "\n"'
+        call s:DebugLog("Running command: " . l:cmd)
+
+        let l:output = system(l:cmd)
+        let l:status = v:shell_error
+
+        call s:DebugLog("base64 conversion complete, status: " . l:status)
+        call s:DebugLog("base64 output length: " . len(l:output))
+
+        if l:status
+            call s:DebugLog("Error: base64 conversion failed")
+            throw "Failed to convert file: " . a:filepath
+        endif
+
+        " Clear progress display
+        redraw
+        echo ""
+
+        return l:output
+    endif
+endfunction
+
+" Cache management functions
+function! s:CacheContext(id) abort
+    let l:entry = v:null
+
+    " Find context entry
+    for e in s:context_entries
+        if e.id == str2nr(a:id)
+            let l:entry = e
+            break
+        endif
+    endfor
+
+    if l:entry is v:null
+        echoerr "No context found with ID " . a:id
+        return
+    endif
+
+    try
+        echo "Caching content from " . l:entry.filepath . "..."
+        let l:content = s:LoadFileWithProgress(l:entry.expanded_path, l:entry.type)
+        let s:context_cache[a:id] = l:content
+        echo "Successfully cached content from " . l:entry.filepath
+    catch
+        echoerr "Failed to cache content from " . l:entry.filepath . ": " . v:exception
+    endtry
+endfunction
+
+function! s:UncacheContext(id) abort
+    let l:id = str2nr(a:id)
+    let l:filepath = ''
+
+    " Find entry with matching ID and store its filepath
+    for entry in s:context_entries
+        if entry.id == l:id
+            let l:filepath = entry.filepath
+            break
+        endif
+    endfor
+
+    if empty(l:filepath)
+        echoerr "No context found with ID " . l:id
+        return
+    endif
+
+    " Remove from cache if present
+    if has_key(s:context_cache, l:id)
+        unlet s:context_cache[l:id]
+        echo "Uncached context " . l:id . " (" . l:filepath . ")"
+    else
+        echo "Context " . l:id . " (" . l:filepath . ") was not cached"
+    endif
+endfunction
+
+function! s:ClearCache() abort
+    let s:context_cache = {}
+    echo "Cleared context cache"
 endfunction
 
 " Core Plugin Functions
