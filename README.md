@@ -27,9 +27,7 @@ This project is a vim rewrite of the following projects:
 - Customizable API configurations
 - Context caching for fast and efficient API usage
 - Show exact tokens of current context
-- TODO: Support for other APIs (probably DeepSeek first, most similar API)
-- TODO: DEMO mp4 and DEMO md
-- TODO: Knowledge stack (prepend only relevant parts of context)
+- WIP: Knowledge stack (prepend only relevant parts of context)
 
 ## Usage (with default mappings)
 
