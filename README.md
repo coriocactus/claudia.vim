@@ -19,17 +19,18 @@ This project is a vim rewrite of the following projects:
 
 ## Features
 
-- Direct integration with Anthropic API
-- Supports Claude 3 models
-- Streaming responses
+- Direct integration with Anthropic API (Claude 3 models)
+- Provide context via local file contents [Supported: texts, images, PDFs]
 - Normal mode and Visual mode prompting
-- Cancel responses with Escape key
-- Customizable API configurations (in vimrc and at runtime)
-- Manage context files to prepend to every prompt
-- WIP: Images as context
-- WIP: PDFs as context
-- WIP: Context caching for efficient API usage
-- TBC: Support for other APIs
+- Streaming responses
+- Stop responses with Escape key
+- Customizable API configurations
+- WIP: Context caching for fast and efficient API usage
+- WIP: Provide context via remote file contents
+- WIP: Show exact tokens of context
+- TODO: Trim trailing whitespace from responses
+- TODO: Support for other APIs (probably DeepSeek first, most similar API)
+- TODO: DEMO mp4 and DEMO md
 
 ## Usage (with default mappings)
 
@@ -50,13 +51,14 @@ You can add file contents as context that will be prepended to every prompt:
 1. Add context files:
 ```vim
 :ClaudiaAddContext ~/path/to/context.txt    " Add a file as context
-:ClaudiaAddContext $PROJECT/app/Main.hs     " Environment variables work
+:ClaudiaAddPDF $HOME/pdfs/context.pdf       " Environment variables work
+:ClaudiaAddImage ./path/to/context.png      " Relative paths work
 ```
 2. Manage context:
 ```vim
 :ClaudiaShowContext     " List all context files and their IDs
-:ClaudiaRemoveContext 2 " Remove context with ID 2
-:ClaudiaRemoveContext 3 " Remove context with ID 3
+:ClaudiaRemoveContext 6 " Remove context with ID 6
+:ClaudiaCacheContext 9  " Cache context with ID 9
 :ClaudiaClearContext    " Remove all context files
 ```
 Context files persist across queries but reset when Vim restarts.
