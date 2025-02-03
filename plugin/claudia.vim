@@ -718,6 +718,15 @@ function! JobExitCallback(job, status)
         unlet s:curl_error_log
     endif
 
+    " Remove trailing whitespace from response
+    let l:save = winsaveview()
+    %s/\s\+$//ge
+    call winrestview(l:save)
+
+    " Move cursor to position 1 of line below response
+    call append('.', '')
+    normal! j0
+
     let s:active_job = v:null
     if hasmapto('CancelJob')
         silent! nunmap <Esc>

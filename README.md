@@ -27,8 +27,6 @@ This project is a vim rewrite of the following projects:
 - Customizable API configurations
 - Context caching for fast and efficient API usage
 - Show exact tokens of current context
-- WIP: Place cursor at position 1 of the line below the end of response
-- WIP: Trim trailing whitespace from responses
 - WIP: Wrap text, but not code
 - TODO: Support for other APIs (probably DeepSeek first, most similar API)
 - TODO: DEMO mp4 and DEMO md
