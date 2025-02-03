@@ -26,7 +26,7 @@ This project is a vim rewrite of the following projects:
 - Stop responses with Escape key
 - Customizable API configurations
 - Context caching for fast and efficient API usage
-- WIP: Show exact tokens of current context
+- Show exact tokens of current context
 - WIP: Place cursor at position 1 of the line below the end of response
 - WIP: Trim trailing whitespace from responses
 - WIP: Wrap text, but not code
@@ -69,6 +69,16 @@ Context persists across queries but resets when Vim restarts.
 Uncached context are read fresh on each query, so edits to context files take effect immediately.
 Cached context are read and stored in memory (and [prompt cached](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).)
 Avoid caching frequently edited files since changes won't be reflected until re-cached.
+
+## Token Counting
+
+Claude limits the total number of input tokens per request. You can check token counts for different parts of your input using these commands:
+```vim
+:ClaudiaContextCost " Shows token count for all loaded context files (excluding prompts)
+:ClaudiaNormalCost  " Shows token count for text from start of file to cursor (excluding context)
+:ClaudiaVisualCost  " Shows token count for current visual selection (excluding context)
+```
+Use these commands to help you stay within token limits and manage context effectively.
 
 ## Requirements
 
