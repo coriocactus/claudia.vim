@@ -310,41 +310,38 @@ function! s:CacheContext(id) abort
     endtry
 endfunction
 
-" Enhanced context entry creation
-function! s:CreateContextEntry(filepath, type) abort
-    " Expand filepath to handle ~ and environment variables
-    let l:expanded_path = expand(a:filepath)
+function! s:UncacheContext(id) abort
+    let l:id = str2nr(a:id)
+    let l:filepath = ''
 
-    " Validate file exists
-    if !filereadable(l:expanded_path)
-        echoerr "File not readable: " . l:expanded_path
-        return v:null
-    endif
-
-    " Get media type for media files
-    let l:media_type = ''
-    if a:type ==# 'media'
-        let l:media_type = s:GetMediaType(l:expanded_path)
-        if empty(l:media_type)
-            echoerr "Unsupported file type: " . l:expanded_path
-            return v:null
+    " Find entry with matching ID and store its filepath
+    for entry in s:context_entries
+        if entry.id == l:id
+            let l:filepath = entry.filepath
+            break
         endif
+    endfor
+
+    if empty(l:filepath)
+        echoerr "No context found with ID " . l:id
+        return
     endif
 
-    " Create context entry without loading content
-    let l:entry = {
-                \ 'id': s:next_context_id,
-                \ 'filepath': a:filepath,
-                \ 'expanded_path': l:expanded_path,
-                \ 'type': a:type,
-                \ 'media_type': l:media_type
-                \ }
+    " Remove from cache if present
+    if has_key(s:context_cache, l:id)
+        unlet s:context_cache[l:id]
+        echo "Uncached context " . l:id . " (" . l:filepath . ")"
+    else
+        echo "Context " . l:id . " (" . l:filepath . ") was not cached"
+    endif
+endfunction
 
-    return l:entry
+function! s:ClearCache() abort
+    let s:context_cache = {}
+    echo "Cleared context cache"
 endfunction
 
 " Context Management Functions
-"
 function! s:UpdateNextContextId() abort
     " If no contexts exist, reset to 1
     if empty(s:context_entries)
@@ -363,30 +360,49 @@ function! s:UpdateNextContextId() abort
 endfunction
 
 function! s:AddContext(filepath) abort
-    let l:entry = s:CreateContextEntry(a:filepath, 'text')
-    if l:entry isnot v:null
-        call add(s:context_entries, l:entry)
-        let s:next_context_id += 1
-        echo "Added context from " . a:filepath . " with ID " . (s:next_context_id - 1)
-    endif
-endfunction
+    " Expand filepath to handle ~ and environment variables
+    let l:expanded_path = expand(a:filepath)
 
-function! s:AddImage(filepath) abort
-    let l:entry = s:CreateContextEntry(a:filepath, 'media')
-    if l:entry isnot v:null
-        call add(s:context_entries, l:entry)
-        let s:next_context_id += 1
-        echo "Added image from " . a:filepath . " with ID " . (s:next_context_id - 1)
+    " Validate file exists
+    if !filereadable(l:expanded_path)
+        echoerr "File not readable: " . l:expanded_path
+        return
     endif
-endfunction
 
-function! s:AddPDF(filepath) abort
-    let l:entry = s:CreateContextEntry(a:filepath, 'media')
-    if l:entry isnot v:null
-        call add(s:context_entries, l:entry)
-        let s:next_context_id += 1
-        echo "Added PDF from " . a:filepath . " with ID " . (s:next_context_id - 1)
+    " Detect file type based on extension
+    let l:ext = tolower(fnamemodify(a:filepath, ':e'))
+    let l:media_types = {
+                \ 'jpg': 'image/jpeg',
+                \ 'jpeg': 'image/jpeg',
+                \ 'png': 'image/png',
+                \ 'gif': 'image/gif',
+                \ 'webp': 'image/webp',
+                \ 'pdf': 'application/pdf'
+                \ }
+
+    " Determine type (text or media) and media_type if applicable
+    let l:type = 'text'
+    let l:media_type = ''
+
+    if has_key(l:media_types, l:ext)
+        let l:type = 'media'
+        let l:media_type = l:media_types[l:ext]
     endif
+
+    " Create context entry
+    let l:entry = {
+                \ 'id': s:next_context_id,
+                \ 'filepath': a:filepath,
+                \ 'expanded_path': l:expanded_path,
+                \ 'type': l:type,
+                \ 'media_type': l:media_type
+                \ }
+
+    call add(s:context_entries, l:entry)
+    let s:next_context_id += 1
+
+    let l:type_str = l:type ==# 'media' ? ' as ' . l:media_type : ''
+    echo "Added context from " . a:filepath . l:type_str . " with ID " . (s:next_context_id - 1)
 endfunction
 
 function! s:ShowContext() abort
@@ -705,20 +721,7 @@ function! JobOutCallback(channel, msg)
     call s:DebugLog("Chunk length: " . len(a:msg))
     call s:DebugLog("First 100 chars: " . strpart(a:msg, 0, 100))
 
-    " Check for error response
-    if a:msg =~# '^{"type":"error"'
-        try
-            let l:json = json_decode(a:msg)
-            if type(l:json) == v:t_dict && has_key(l:json, 'error')
-                call s:HandleAPIError(l:json)
-                return
-            endif
-        catch
-            call s:DebugLog("Error parsing error JSON: " . v:exception)
-        endtry
-    endif
-
-    " If not an error, process normally
+    " Pass all messages to HandleAnthropicData for processing
     call HandleAnthropicData(a:msg, 'content_block_delta')
 endfunction
 
@@ -858,6 +861,13 @@ function! HandleAnthropicData(data, event_state) abort
         try
             let l:json = json_decode(l:data)
             call s:DebugLog("Parsed JSON: " . string(l:json))
+
+            " Check for error events
+            if l:event_type ==# 'error' || (type(l:json) == v:t_dict && has_key(l:json, 'type') && l:json.type ==# 'error')
+                call s:HandleAPIError(l:json)
+                return
+            endif
+
             if l:event_type ==# 'content_block_delta'
                 if has_key(l:json, 'delta') && has_key(l:json.delta, 'text')
                     call s:DebugLog("Writing delta text: " . l:json.delta.text)
@@ -926,12 +936,14 @@ command! ClaudiaResetConfig call s:InitializeConfig()
 
 " Context management commands
 command! -nargs=1 -complete=file ClaudiaAddContext call s:AddContext(<q-args>)
-command! -nargs=1 -complete=file ClaudiaAddImage call s:AddImage(<q-args>)
-command! -nargs=1 -complete=file ClaudiaAddPDF call s:AddPDF(<q-args>)
-command! -nargs=1 ClaudiaCacheContext call s:CacheContext(<q-args>)
 command! -nargs=1 ClaudiaRemoveContext call s:RemoveContext(<q-args>)
 command! ClaudiaShowContext call s:ShowContext()
 command! ClaudiaClearContext call s:ClearContext()
+
+" Cache management commands
+command! -nargs=1 ClaudiaCacheContext call s:CacheContext(<q-args>)
+command! -nargs=1 ClaudiaUncacheContext call s:UncacheContext(<q-args>)
+command! ClaudiaClearCache call s:ClearCache()
 
 " Debug commands
 command! ClaudiaToggleDebug call s:ToggleDebug()

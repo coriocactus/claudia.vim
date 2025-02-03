@@ -33,6 +33,7 @@ This project is a vim rewrite of the following projects:
 - WIP: Wrap text, but not code
 - TODO: Support for other APIs (probably DeepSeek first, most similar API)
 - TODO: DEMO mp4 and DEMO md
+- TODO: Knowledge stack (prepend only relevant parts of context)
 
 ## Usage (with default mappings)
 
@@ -53,24 +54,30 @@ You can add file contents as context that will be prepended to every prompt:
 1. Add context files:
 ```vim
 :ClaudiaAddContext ~/path/to/context.txt    " Add a file as context
-:ClaudiaAddPDF $HOME/pdfs/context.pdf       " Environment variables work
-:ClaudiaAddImage ./path/to/context.png      " Relative paths work
+:ClaudiaAddContext $HOME/pdfs/context.pdf   " Environment variables work
+:ClaudiaAddContext ./path/to/context.png    " Relative paths work
 ```
 2. Manage context:
 ```vim
-:ClaudiaShowContext     " List all context files and their IDs
-:ClaudiaRemoveContext 6 " Remove context with ID 6
-:ClaudiaCacheContext 9  " Cache context with ID 9
-:ClaudiaClearContext    " Remove all context files
+:ClaudiaShowContext         " List all context files and their IDs
+:ClaudiaRemoveContext 6     " Remove context with ID 6
+:ClaudiaClearContext        " Remove all context files
+:ClaudiaCacheContext 9      " Cache context with ID 9 to avoid reloading
+:ClaudiaUncacheContext 9    " Remove context ID 9 from cache
+:ClaudiaClearCache          " Clear all cached context
 ```
-Context files persist across queries but reset when Vim restarts.
-Files are read fresh on each query, so edits to context files take effect immediately.
+Context persists across queries but resets when Vim restarts.
+Uncached context are read fresh on each query, so edits to context files take effect immediately.
+Cached context are read and stored in memory (and [prompt cached](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).)
+Avoid caching frequently edited files since changes won't be reflected until re-cached.
 
 ## Requirements
 
 - Vim 8+ (for job control features)
-- curl installed on your system
-- Anthropic API key
+- curl installed on your system with SSL support
+- Anthropic API key (stored in ANTHROPIC_API_KEY environment variable)
+- +job and +channel features compiled in Vim
+- +json feature compiled in Vim (for JSON handling)
 
 ## Getting Started
 
