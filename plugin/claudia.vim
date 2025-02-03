@@ -8,7 +8,7 @@ if !exists('g:claudia_config')
                 \ 'url': 'https://api.anthropic.com/v1/messages',
                 \ 'api_key_name': 'ANTHROPIC_API_KEY',
                 \ 'model': 'claude-3-5-sonnet-20241022',
-                \ 'system_prompt': 'You are a helpful assistant.',
+                \ 'system_prompt': '',
                 \ 'max_tokens': 4096,
                 \ 'temperature': 0.25,
                 \ }
@@ -167,8 +167,28 @@ function! s:ShowDebugLog() abort
 endfunction
 
 " Configuration Management Functions
+
+function! s:LoadSystemPrompt() abort
+    let l:script_dir = expand('<sfile>:p:h')
+    let l:system_file = l:script_dir . '/system.md'
+    
+    if filereadable(l:system_file)
+        try
+            let l:content = join(readfile(l:system_file), "\n")
+            let g:claudia_config.system_prompt = l:content
+            call s:DebugLog("Loaded system prompt from " . l:system_file)
+        catch
+            call s:DebugLog("Error loading system prompt: " . v:exception)
+            let g:claudia_config.system_prompt = 'You are a helpful assistant.'
+        endtry
+    else
+        call s:DebugLog("System prompt file not found: " . l:system_file)
+        let g:claudia_config.system_prompt = 'You are a helpful assistant.'
+    endif
+endfunction
+
 function! s:InitializeConfig() abort
-    " Allow user to override defaults in their vimrc
+    call s:LoadSystemPrompt()
     let l:user_config = get(g:, 'claudia_user_config', {})
     let g:claudia_config = extend(copy(g:claudia_config), l:user_config)
 endfunction
@@ -651,7 +671,11 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \ 'stream': v:true,
                 \ 'max_tokens': g:claudia_config.max_tokens,
                 \ 'temperature': g:claudia_config.temperature,
-                \ 'system': [{'type': 'text', 'text': g:claudia_config.system_prompt}]
+                \ 'system': [{
+                \     'type': 'text',
+                \     'text': g:claudia_config.system_prompt,
+                \     'cache_control': {'type': 'ephemeral'}
+                \ }]
                 \ }
 
     " Log sanitized request data with preserved structure
