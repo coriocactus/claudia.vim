@@ -171,7 +171,7 @@ endfunction
 function! s:LoadSystemPrompt() abort
     let l:script_dir = expand('<sfile>:p:h')
     let l:system_file = l:script_dir . '/system.md'
-    
+
     if filereadable(l:system_file)
         try
             let l:content = join(readfile(l:system_file), "\n")
@@ -221,9 +221,22 @@ function! s:SetMaxTokens(tokens) abort
     endif
 endfunction
 
-function! s:SetSystemPrompt(prompt) abort
-    let g:claudia_config.system_prompt = a:prompt
-    echo "claudia system prompt updated"
+function! s:SetSystemPrompt(input) abort
+  let l:filepath = expand(a:input)
+  if filereadable(l:filepath)
+    try
+      let l:content = join(readfile(l:filepath), "\n")
+      let g:claudia_config.system_prompt = l:content
+      call s:DebugLog("Loaded system prompt from " . l:filepath)
+      echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
+    catch
+      call s:DebugLog("Error loading system prompt: " . v:exception)
+      echoerr "Failed to read " . l:filepath . ": " . v:exception
+    endtry
+  else
+    let g:claudia_config.system_prompt = a:input
+    echo "System prompt set to " . a:input
+  endif
 endfunction
 
 function! s:SetModel(model) abort
@@ -1079,7 +1092,7 @@ endfunction
 " Commands for runtime configuration
 command! -nargs=1 ClaudiaTemp call s:SetTemperature(<q-args>)
 command! -nargs=1 ClaudiaTokens call s:SetMaxTokens(<q-args>)
-command! -nargs=1 ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
+command! -nargs=1 -complete=file ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
 command! -nargs=1 ClaudiaModel call s:SetModel(<q-args>)
 command! ClaudiaShowConfig call s:ShowConfig()
 command! ClaudiaResetConfig call s:InitializeConfig()

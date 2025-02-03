@@ -140,7 +140,8 @@ let g:claudia_user_config = {
 ```vim
 " Modify configs at runtime
 :ClaudiaModel claude-3-opus-20240229
-:ClaudiaSystemPrompt Pretend you are sentient.
+:ClaudiaSystemPrompt Pretend you are sentient.  " Set system prompt
+:ClaudiaSystemPrompt ~/path/to/system.md        " Set system prompt from file
 :ClaudiaTokens 8192
 :ClaudiaTemp 0.75
 :ClaudiaResetConfig
