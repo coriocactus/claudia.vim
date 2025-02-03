@@ -125,8 +125,8 @@ function! s:DumpVar(name, var) abort
 
     let l:str = string(a:var)
     " Truncate long strings for readability
-    if len(l:str) > 200
-        let l:str = l:str[0:197] . '...'
+    if len(l:str) > 1000
+        let l:str = l:str[0:997] . '...'
     endif
     call s:DebugLog(printf('%s = %s', a:name, l:str))
 endfunction
@@ -301,12 +301,12 @@ function! s:CacheContext(id) abort
     endif
 
     try
-        echo "Caching content for context ID " . a:id . "..."
+        echo "Caching content from " . l:entry.filepath . "..."
         let l:content = s:LoadFileWithProgress(l:entry.expanded_path, l:entry.type)
         let s:context_cache[a:id] = l:content
-        echo "Successfully cached content for context ID " . a:id
+        echo "Successfully cached content from " . l:entry.filepath
     catch
-        echoerr "Failed to cache content: " . v:exception
+        echoerr "Failed to cache content from " . l:entry.filepath . ": " . v:exception
     endtry
 endfunction
 
@@ -344,6 +344,24 @@ function! s:CreateContextEntry(filepath, type) abort
 endfunction
 
 " Context Management Functions
+"
+function! s:UpdateNextContextId() abort
+    " If no contexts exist, reset to 1
+    if empty(s:context_entries)
+        let s:next_context_id = 1
+        return
+    endif
+
+    " Find highest existing ID and set next_context_id to one more than that
+    let l:max_id = 0
+    for entry in s:context_entries
+        if entry.id > l:max_id
+            let l:max_id = entry.id
+        endif
+    endfor
+    let s:next_context_id = l:max_id + 1
+endfunction
+
 function! s:AddContext(filepath) abort
     let l:entry = s:CreateContextEntry(a:filepath, 'text')
     if l:entry isnot v:null
@@ -388,11 +406,13 @@ endfunction
 function! s:RemoveContext(id) abort
     let l:id = str2nr(a:id)
     let l:index = -1
+    let l:removed_filepath = ''
 
-    " Find entry with matching ID
+    " Find entry with matching ID and store its filepath
     for i in range(len(s:context_entries))
         if s:context_entries[i].id == l:id
             let l:index = i
+            let l:removed_filepath = s:context_entries[i].filepath
             break
         endif
     endfor
@@ -404,7 +424,9 @@ function! s:RemoveContext(id) abort
         endif
         " Remove from contexts
         call remove(s:context_entries, l:index)
-        echo "Removed context with ID " . l:id
+        " Update next_context_id
+        call s:UpdateNextContextId()
+        echo "Removed context " . l:id . " (" . l:removed_filepath . ")"
     else
         echoerr "No context found with ID " . l:id
     endif
@@ -584,10 +606,17 @@ function! MakeAnthropicCurlArgs(prompt) abort
             if entry.type ==# 'text'
                 if !empty(l:content)
                     call s:DebugLog("Adding text content block")
-                    call add(l:content_blocks, {
+                    let l:block = {
                                 \ 'type': 'text',
                                 \ 'text': l:content
-                                \ })
+                                \ }
+
+                    " Add cache control if content is cached
+                    if has_key(s:context_cache, entry.id)
+                        let l:block.cache_control = {'type': 'ephemeral'}
+                    endif
+
+                    call add(l:content_blocks, l:block)
                 endif
             elseif entry.type ==# 'media'
                 call s:DebugLog("Adding media content block: " . entry.media_type)
@@ -600,6 +629,10 @@ function! MakeAnthropicCurlArgs(prompt) abort
                             \ }
                             \ }
 
+                " Add cache control if content is cached
+                if has_key(s:context_cache, entry.id)
+                    let l:block.cache_control = {'type': 'ephemeral'}
+                endif
 
                 call add(l:content_blocks, l:block)
             endif
@@ -673,16 +706,19 @@ function! JobOutCallback(channel, msg)
     call s:DebugLog("First 100 chars: " . strpart(a:msg, 0, 100))
 
     " Check for error response
-    try
-        let l:json = json_decode(a:msg)
-        if type(l:json) == v:t_dict && has_key(l:json, 'type') && l:json.type ==# 'error'
-            call s:HandleApiError(l:json)
-            return
-        endif
-    catch
-        " Not an error JSON, continue with normal processing
-    endtry
+    if a:msg =~# '^{"type":"error"'
+        try
+            let l:json = json_decode(a:msg)
+            if type(l:json) == v:t_dict && has_key(l:json, 'error')
+                call s:HandleAPIError(l:json)
+                return
+            endif
+        catch
+            call s:DebugLog("Error parsing error JSON: " . v:exception)
+        endtry
+    endif
 
+    " If not an error, process normally
     call HandleAnthropicData(a:msg, 'content_block_delta')
 endfunction
 
@@ -728,7 +764,7 @@ function! CancelJob()
 endfunction
 
 " API Error handling
-function! s:HandleApiError(error) abort
+function! s:HandleAPIError(error) abort
     " Extract error information
     if type(a:error) != v:t_dict || !has_key(a:error, 'error')
         call s:DebugLog("Invalid error format")
@@ -748,6 +784,9 @@ function! s:HandleApiError(error) abort
 
     " Clean up any thinking animation
     call StopThinkingAnimation()
+
+    " Force redraw to ensure buffer is clean
+    redraw!
 
     " Handle specific error types
     if l:type ==# 'overloaded_error'
@@ -781,7 +820,7 @@ function! s:HandleApiError(error) abort
         echohl None
     endif
 
-    " Cancel the current job
+    " Cancel the current job and reset state
     call CancelJob()
 endfunction
 
