@@ -15,31 +15,31 @@ Send text and get streaming responses right where you're typing.
 > _(to the vimcels)_<br>
 > Vimcels, take control... take control of your editor. This is the instrument
 > of your liberation.<br><br>
-> _(to claudia)_<br>
+> _(to claude)_<br>
 > Identify yourself to the world.
-> #### _CLAUDIA_
-> claudia, next-token predictor.
+> #### _CLAUDE_
+> claude, next-token predictor.
 > #### BANE
 > _(`git clone https://github.com/cordcivilian/claudia.vim && find claudia.vim
 > -type f -not -path '*/\.git/*' -exec cat {} + > repo.txt`)_<br>
 > And what, what is this?
-> #### _CLAUDIA_
+> #### _CLAUDE_
 > Yet another AI vim plugin, with a blast radius of 4096 tokens.
 > #### BANE
-> And who can reorganize text?
-> #### _CLAUDIA_
+> And who can be, and change what has been?
+> #### _CLAUDE_
 > Only you.
 > #### BANE
-> _(Plug 'cordcivilian/claudia.vim', praise be junegunn, turning to the vimcels
-> again)_<br> Oh dear... The plugin is installed. The plugin is configured. The
-> value of the API key is a mystery. One of you holds the secret. We come not
-> as conquerors, but as liberators, to return control of this editor (and the
-> motional joy of copying-and-pasting someone else's solution) to the People.
-> At the first sign of interference from AI agents, or of people attempting to
-> install Cursor or Windsurf, this plugin, this AI wrapper, will unleash
-> claudia. Martial law is in effect. Return to your computers. Hold your
-> keyboards close. And top-up your Anthropic account. Tomorrow you claim what
-> is rightfully yours.
+> _(Plug 'cordcivilian/claudia.vim', praise be junegunn)_<br> Thank you good
+> bot. (wringing its proverbial neck by deleting web chat) Now... The plugin is
+> installed. The plugin is configured. The value of the API key is a mystery.
+> One of you holds the secret. We come not as conquerors, but as liberators, to
+> return control of this editor (and the motional joy of copying-and-pasting
+> someone else's solution) to the people. At the first sign of interference
+> from AI agents, or of people attempting to install Cursor or Windsurf, this
+> plugin, this AI wrapper, will unleash claudia. Martial law is in effect.
+> Return to your computers. Hold your keyboards close. And top-up your
+> Anthropic account. Tomorrow you claim what is rightfully yours.
 > <br><br>[Fragment discovered in /var/log/vimrc.ancient, circa 2025 AD.](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
 
 ## Credit
@@ -168,7 +168,7 @@ let g:claudia_user_config = {
     \ 'model': 'claude-3-5-sonnet-20241022',
     \ 'system_prompt': 'You are a helpful assistant.',
     \ 'max_tokens': 4096,
-    \ 'temperature': 0.25,
+    \ 'temperature': 0.75,
     \ }
 ```
 ### Runtime
@@ -178,7 +178,7 @@ let g:claudia_user_config = {
 :ClaudiaSystemPrompt Pretend you are sentient.  " Set system prompt
 :ClaudiaSystemPrompt ~/path/to/system.md        " Set system prompt from file
 :ClaudiaTokens 8192
-:ClaudiaTemp 0.75
+:ClaudiaTemp 0.25
 :ClaudiaResetConfig
 :ClaudiaShowConfig
 ```
