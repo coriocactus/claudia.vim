@@ -10,7 +10,7 @@ if !exists('g:claudia_config')
                 \ 'model': 'claude-3-5-sonnet-20241022',
                 \ 'system_prompt': '',
                 \ 'max_tokens': 4096,
-                \ 'temperature': 0.25,
+                \ 'temperature': 0.75,
                 \ }
 endif
 
