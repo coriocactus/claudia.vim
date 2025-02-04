@@ -26,7 +26,7 @@ Send text and get streaming responses right where you're typing.
 > #### _CLAUDE_
 > Yet another AI vim plugin, with a blast radius of 4096 tokens.
 > #### BANE
-> And who can be, and change what has been?
+> And who can [edit], unburdened by what has been [written]?
 > #### _CLAUDE_
 > Only you.
 > #### BANE
@@ -36,11 +36,11 @@ Send text and get streaming responses right where you're typing.
 > for one of you holds the secret. We come here not as conquerors, but as
 > liberators, to return control of this editor (and the motional joy of
 > copying-and-pasting someone else's solution) to the people. And at the first
-> signs of interference from AI agents, or of those people attempting to
-> install Cursor or Windsurf, this plugin, this AI wrapper, will unleash
-> claudia. For now, martial law is in effect. Return to your computers, hold
-> your keyboards close, and top-up your Anthropic account. Tomorrow you claim
-> what is rightfully yours.
+> signs of interference from AI agents - which Github Copilot is not, or of
+> those people attempting to install Cursor or Windsurf, this plugin, this AI
+> wrapper, will unleash claudia. For now, martial law is in effect. Return to
+> your computers, hold your keyboards close, and top-up your Anthropic account.
+> Tomorrow you claim what is rightfully yours.
 > <br><br>[Fragment discovered in /var/log/vimrc.ancient, circa 2025 AD.](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
 
 ## Credit
