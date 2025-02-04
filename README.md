@@ -11,25 +11,35 @@ Send text and get streaming responses right where you're typing.
 - More AI, less configs.
 - Pay for intelligence, not the messenger.
 
-> ##### BANE
+> #### BANE
 > _(to the vimcels)_<br>
-> Vimcels, take control... take control of your editor. This is the instrument of your liberation.<br><br>
+> Vimcels, take control... take control of your editor. This is the instrument
+> of your liberation.<br><br>
 > _(to claudia)_<br>
 > Identify yourself to the world.
-> ##### _CLAUDIA_
+> #### _CLAUDIA_
 > claudia, next-token predictor.
-> ##### BANE
-> _(`git clone https://github.com/cordcivilian/claudia.vim && find claudia.vim -type f -not -path '*/\.git/*' -exec cat {} + > repo.txt`)_<br>
+> #### BANE
+> _(`git clone https://github.com/cordcivilian/claudia.vim && find claudia.vim
+> -type f -not -path '*/\.git/*' -exec cat {} + > repo.txt`)_<br>
 > And what, what is this?
-> ##### _CLAUDIA_
-> Yet another AI vim plugin, with a blast radius of your active buffer.
-> ##### BANE
-> And who can edit existing texts?
-> ##### _CLAUDIA_
+> #### _CLAUDIA_
+> Yet another AI vim plugin, with a blast radius of 4096 tokens.
+> #### BANE
+> And who can reorganize text?
+> #### _CLAUDIA_
 > Only you.
-> ##### BANE
-> _(edits vimrc and exports API key, turning to the vimcels again)_<br>
-> Oh dear... The plugin is installed. The plugin is configured. The default binding is \<Leader\>c, unless you already have normal and visual mode \<Leader\>c mappings. We come not as conquerors, but as liberators, to return control of this editor to the People. At the first thought of switching to Chrome, or of installing Cursor or Windsurf, this binding, this \<silent\> command, will activate claudia. Vim philosophy is in effect. Return to your terminals. Hold your keyboard close. And type. Tomorrow you claim what is rightfully yours.
+> #### BANE
+> _(Plug 'cordcivilian/claudia.vim', praise be junegunn, turning to the vimcels
+> again)_<br> Oh dear... The plugin is installed. The plugin is configured. The
+> value of the API key is a mystery. One of you holds the secret. We come not
+> as conquerors, but as liberators, to return control of this editor (and the
+> motional joy of copying-and-pasting someone else's solution) to the People.
+> At the first sign of interference from AI agents, or of people attempting to
+> install Cursor or Windsurf, this plugin, this AI wrapper, will unleash
+> claudia. Martial law is in effect. Return to your computers. Hold your
+> keyboards close. And top-up your Anthropic account. Tomorrow you claim what
+> is rightfully yours.
 > <br><br>[Fragment discovered in /var/log/vimrc.ancient, circa 2025 AD.](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
 
 ## Credit
