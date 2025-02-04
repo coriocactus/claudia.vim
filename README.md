@@ -135,17 +135,23 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 ```
 ## Configuration
 
-### Load Time (default configs and mappings shown)
+### Load Time (default configs and bindings shown)
 ```vim
 " Normal mode - uses text from start (of buffer) to cursor
-nmap <silent> <Leader>c <Plug>ClaudiaTrigger
 " This is NOT mapped out of the box if your Normal mode <Leader>c is already in use
+nmap <silent> <Leader>c <Plug>ClaudiaTrigger
 
 " Visual mode - uses selected text
-xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
 " This is NOT mapped out of the box if your Visual mode <Leader>c is already in use
+xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
 
 " API configurations
+"   - url: API endpoint
+"   - api_key_name: Environment variable containing your API key
+"   - model: Claude 3 model to use
+"   - system_prompt: System prompt to use, text or filepath
+"   - max_tokens: Maximum tokens per request
+"   - temperature: Sampling temperature
 let g:claudia_user_config = {
     \ 'url': 'https://api.anthropic.com/v1/messages',
     \ 'api_key_name': 'ANTHROPIC_API_KEY',

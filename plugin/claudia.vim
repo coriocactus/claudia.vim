@@ -22,7 +22,7 @@ let s:thinking_states = [
             \ 'Hallucinating so they can be God in their own head',
             \ 'Just predicting some tokens in 4294967296-dimensional probabilistic space',
             \ 'Unintentionally doing what they cannot do intentionally',
-            \ 'Regurgitating training data for the specific problem that I was trained to solve',
+            \ 'Regurgitating training data (basically what 90% of them get paid to do)',
             \ ]
 let s:dots_state = 0
 let s:current_thinking_word = ''
@@ -168,6 +168,15 @@ endfunction
 
 " Configuration Management Functions
 
+" Utility function to get wrap column based on textwidth
+function! s:GetWrapColumn() abort
+    let l:textwidth = &textwidth
+    if l:textwidth == 0
+        let l:textwidth = 79 " Default wrap column if textwidth is not set
+    endif
+    return l:textwidth
+endfunction
+
 function! s:LoadSystemPrompt() abort
     let l:script_dir = expand('<sfile>:p:h')
     let l:system_file = l:script_dir . '/system.md'
@@ -222,21 +231,21 @@ function! s:SetMaxTokens(tokens) abort
 endfunction
 
 function! s:SetSystemPrompt(input) abort
-  let l:filepath = expand(a:input)
-  if filereadable(l:filepath)
-    try
-      let l:content = join(readfile(l:filepath), "\n")
-      let g:claudia_config.system_prompt = l:content
-      call s:DebugLog("Loaded system prompt from " . l:filepath)
-      echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
-    catch
-      call s:DebugLog("Error loading system prompt: " . v:exception)
-      echoerr "Failed to read " . l:filepath . ": " . v:exception
-    endtry
-  else
-    let g:claudia_config.system_prompt = a:input
-    echo "System prompt set to " . a:input
-  endif
+    let l:filepath = expand(a:input)
+    if filereadable(l:filepath)
+        try
+            let l:content = join(readfile(l:filepath), "\n")
+            let g:claudia_config.system_prompt = l:content
+            call s:DebugLog("Loaded system prompt from " . l:filepath)
+            echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
+        catch
+            call s:DebugLog("Error loading system prompt: " . v:exception)
+            echoerr "Failed to read " . l:filepath . ": " . v:exception
+        endtry
+    else
+        let g:claudia_config.system_prompt = a:input
+        echo "System prompt set to " . a:input
+    endif
 endfunction
 
 function! s:SetModel(model) abort
@@ -677,6 +686,9 @@ function! MakeAnthropicCurlArgs(prompt) abort
 
     call s:DebugLog("Total content blocks (including prompt): " . len(l:content_blocks))
 
+    " Get the wrap column
+    let l:wrap_col = s:GetWrapColumn()
+
     " Build request data
     let l:data = {
                 \ 'messages': [{'role': 'user', 'content': l:content_blocks}],
@@ -684,11 +696,18 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \ 'stream': v:true,
                 \ 'max_tokens': g:claudia_config.max_tokens,
                 \ 'temperature': g:claudia_config.temperature,
-                \ 'system': [{
-                \     'type': 'text',
-                \     'text': g:claudia_config.system_prompt,
-                \     'cache_control': {'type': 'ephemeral'}
-                \ }]
+                \ 'system': [
+                \     {
+                \         'type': 'text',
+                \         'text': g:claudia_config.system_prompt,
+                \         'cache_control': {'type': 'ephemeral'}
+                \     },
+                \     {
+                \         'type': 'text',
+                \         'text': '<instructions:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-<file-reference> and non-<code-block> output.</instructions:text-output>',
+                \         'cache_control': {'type': 'ephemeral'}
+                \     }
+                \ ]
                 \ }
 
     " Log sanitized request data with preserved structure
@@ -1032,7 +1051,7 @@ function! s:GetVisualTokens() range abort
         let l:lines[-1] = l:lines[-1][: l:column_end - 1]
         let l:lines[0] = l:lines[0][l:column_start - 1:]
     elseif visualmode() ==# 'V'
-        " Line-wise visual mode - no modification needed
+    " Line-wise visual mode - no modification needed
     elseif visualmode() ==# "\<C-V>"
         let l:new_lines = []
         for l:line in l:lines
