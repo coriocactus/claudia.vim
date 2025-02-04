@@ -471,7 +471,7 @@ endfunction
 
 " Core Plugin Functions
 function! GetApiKey(name) abort
-    return $ANTHROPIC_API_KEY
+    return eval('$' . g:claudia_config.api_key_name)
 endfunction
 
 function! AnimateThinking(timer) abort
@@ -604,10 +604,10 @@ function! MakeAnthropicCurlArgs(prompt) abort
     call s:DebugLog("Number of context entries: " . len(s:context_entries))
 
     " Validate API key
-    let l:api_key = $ANTHROPIC_API_KEY
+    let l:api_key = eval('$' . g:claudia_config.api_key_name)
     if empty(l:api_key)
         call s:DebugLog("Error: API key not found in environment")
-        echoerr "API key not found in environment variable ANTHROPIC_API_KEY"
+        echoerr "API key not found in environment variable " . g:claudia_config.api_key_name
         return []
     endif
     call s:DebugLog("API key found (length: " . len(l:api_key) . ")")
@@ -704,7 +704,7 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \     },
                 \     {
                 \         'type': 'text',
-                \         'text': '<instructions:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-<file-reference> and non-<code-block> output.</instructions:text-output>',
+                \         'text': '<instructions:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output.</instructions:text-output>',
                 \         'cache_control': {'type': 'ephemeral'}
                 \     }
                 \ ]
@@ -978,7 +978,7 @@ function! s:MakeTokenCountRequest(content_blocks) abort
                 \ . '--header "anthropic-version: 2023-06-01" '
                 \ . '--data %s',
                 \ shellescape('https://api.anthropic.com/v1/messages/count_tokens'),
-                \ $ANTHROPIC_API_KEY,
+                \ eval('$' . g:claudia_config.api_key_name),
                 \ shellescape(json_encode(l:data)))
 
     " Execute curl and get response directly
