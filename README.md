@@ -5,11 +5,12 @@ Send text and get streaming responses right where you're typing.
 
 ## Why
 
-- It's the age of the [terminal](https://github.com/ghostty-org/ghostty).
-- AIs don’t need breaks--say no to "message limits."
+- Alt-Tab? Cmd-Tab? Spaces? No. Stay in the terminal.
+- AIs don’t need breaks--say no to "message limits." (ok, maybe [rate limits](https://docs.anthropic.com/en/api/rate-limits))
 - Keep API keys out of the browser.
-- Maximum AI, minimal config.
+- More AI, less configs.
 - Pay for intelligence, not the messenger.
+- ["Take Control. Take control of your Cursor. This. This is the instrument of your liberation."](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
 
 ## Credit
 
