@@ -32,14 +32,15 @@ Send text and get streaming responses right where you're typing.
 > #### BANE
 > _(Plug 'cordcivilian/claudia.vim', praise be junegunn)_<br> Thank you good
 > bot. (wringing its proverbial neck by deleting web chat) Now... The plugin is
-> installed. The plugin is configured. The value of the API key is a mystery.
-> One of you holds the secret. We come not as conquerors, but as liberators, to
-> return control of this editor (and the motional joy of copying-and-pasting
-> someone else's solution) to the people. At the first sign of interference
-> from AI agents, or of people attempting to install Cursor or Windsurf, this
-> plugin, this AI wrapper, will unleash claudia. Martial law is in effect.
-> Return to your computers. Hold your keyboards close. And top-up your
-> Anthropic account. Tomorrow you claim what is rightfully yours.
+> installed. The plugin is configured. The content of the API key is a mystery,
+> for one of you holds the secret. We come here not as conquerors, but as
+> liberators, to return control of this editor (and the motional joy of
+> copying-and-pasting someone else's solution) to the people. And at the first
+> signs of interference from AI agents, or of those people attempting to
+> install Cursor or Windsurf, this plugin, this AI wrapper, will unleash
+> claudia. For now, martial law is in effect. Return to your computers, hold
+> your keyboards close, and top-up your Anthropic account. Tomorrow you claim
+> what is rightfully yours.
 > <br><br>[Fragment discovered in /var/log/vimrc.ancient, circa 2025 AD.](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
 
 ## Credit
@@ -91,7 +92,7 @@ You can add file contents as context that will be prepended to every prompt:
 :ClaudiaUncacheContext 9    " Remove context ID 9 from cache
 :ClaudiaClearCache          " Clear all cached context
 ```
-Context persists across queries but resets when Vim restarts.  Uncached context
+Context persists across queries but resets when Vim restarts. Uncached context
 are read fresh on each query, so edits to context files take effect
 immediately. Cached context are read and stored in memory (and [prompt
 cached](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).)
@@ -156,12 +157,12 @@ nmap <silent> <Leader>c <Plug>ClaudiaTrigger
 xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
 
 " API configurations
-"   - url: API endpoint
-"   - api_key_name: Environment variable containing your API key
-"   - model: Claude 3 model to use
-"   - system_prompt: System prompt to use, text or filepath
-"   - max_tokens: Maximum tokens per request
-"   - temperature: Sampling temperature
+" - url: API endpoint
+" - api_key_name: Environment variable containing your API key
+" - model: Claude 3 model to use
+" - system_prompt: System prompt to use, text or filepath
+" - max_tokens: Maximum tokens per request
+" - temperature: Sampling temperature
 let g:claudia_user_config = {
     \ 'url': 'https://api.anthropic.com/v1/messages',
     \ 'api_key_name': 'ANTHROPIC_API_KEY',
