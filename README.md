@@ -175,11 +175,20 @@ let g:claudia_user_config = {
 ### Runtime
 ```vim
 " Modify configs at runtime
-:ClaudiaModel claude-3-opus-20240229
+:Claudia140IQ                                   " Switch to 3.5 sonnet
+:Claudia120IQ                                   " Switch to 3.5 haiku
+:ClaudiaModel claude-3-opus-20240229            " Switch to 3.0 opus
+
 :ClaudiaSystemPrompt Pretend you are sentient.  " Set system prompt
 :ClaudiaSystemPrompt ~/path/to/system.md        " Set system prompt from file
-:ClaudiaTokens 8192
-:ClaudiaTemp 0.25
+
+:ClaudiaMaxTokens                               " Max output
+:ClaudiaTokens 1024                             " Set max tokens to 1024
+
+:ClaudiaCoffee                                  " Set temperature to 0
+:Claudia420                                     " Set temperature to 1
+:ClaudiaTemp 0.25                               " Set temperature to 0.25
+
 :ClaudiaResetConfig
 :ClaudiaShowConfig
 ```
