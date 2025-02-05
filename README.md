@@ -99,14 +99,11 @@ cached](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).)
 Avoid caching frequently edited files since changes won't be reflected until
 re-cached.
 
-## System Prompt
+## System Prompt (WIP)
 
 claudia uses a system prompt to define its core behavior and capabilities. The
-system prompt is loaded from a `system.md` file in the plugin directory and is
-automatically cached by the API for improved performance.
-
-## Configuration
-1. Create a `system.md` file in the plugin directory:
+default system prompt is loaded from the `system.md` file in the plugin
+directory.
 
 ## Token Counting
 
