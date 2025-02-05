@@ -119,11 +119,9 @@ effectively.
 
 ## Requirements
 
-- Vim 8+ (for job control features)
-- curl installed on your system with SSL support
-- Anthropic API key (stored in ANTHROPIC_API_KEY environment variable)
-- +job and +channel features compiled in Vim
-- +json feature compiled in Vim (for JSON handling)
+- Vim 9+
+- curl
+- Anthropic API key
 
 ## Getting Started
 
