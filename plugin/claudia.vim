@@ -973,15 +973,13 @@ function! HandleAnthropicData(data, event_state) abort
 endfunction
 
 function! s:TriggerClaudia() abort
-    " Reset global state before starting new response
     call ResetGlobalState()
 
-    " Store initial cursor position
     let s:original_cursor_pos = getpos('.')
 
-    " Handle newline insertion based on mode
-    let l:prompt = GetVisualSelection()
-    if !empty(l:prompt)
+    let l:mode = mode()
+    if l:mode ==# 'v' || l:mode ==# 'V' || l:mode ==# "\<C-V>"
+        let l:prompt = GetVisualSelection()
         let l:end_line = line("'>")
         execute "normal! \<Esc>"
         call setline(l:end_line + 1, [''])
@@ -992,12 +990,10 @@ function! s:TriggerClaudia() abort
         normal! j
     endif
 
-    " Start thinking animation before making API call
     call StartThinkingAnimation()
 
     let l:args = MakeAnthropicCurlArgs(l:prompt)
 
-    " Build curl command
     let l:curl_cmd = 'curl -N -s --no-buffer'
     for l:arg in l:args
         let l:curl_cmd .= ' ' . shellescape(l:arg)
