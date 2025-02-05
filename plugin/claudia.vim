@@ -2,6 +2,19 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
+let s:models_info = {
+            \ 'claude-3-5-sonnet-20241022': {
+            \ 'name': 'Claude 3.5 Sonnet',
+            \ 'max_tokens': 8192,
+            \ 'vision': v:true
+            \ },
+            \ 'claude-3-5-haiku-20241022': {
+            \ 'name': 'Claude 3.5 Haiku',
+            \ 'max_tokens': 8192,
+            \ 'vision': v:false
+            \ }
+            \ }
+
 " Global configuration dictionary - Must be defined before global state
 if !exists('g:claudia_config')
     let g:claudia_config = {
@@ -168,7 +181,6 @@ endfunction
 
 " Configuration Management Functions
 
-" Utility function to get wrap column based on textwidth
 function! s:GetWrapColumn() abort
     let l:textwidth = &textwidth
     if l:textwidth == 0
@@ -210,6 +222,31 @@ function! s:ShowConfig() abort
     echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
 endfunction
 
+function! s:SetModel(model) abort
+    let g:claudia_config.model = a:model
+    echo "claudia model set to " . a:model
+endfunction
+
+function! s:SwitchModel(new_model) abort
+    if !has_key(s:models_info, a:new_model)
+        echoerr "Invalid model: " . a:new_model
+        return
+    endif
+
+    " Store current settings
+    let l:current_temp = g:claudia_config.temperature
+    let l:current_tokens = g:claudia_config.max_tokens
+
+    " Switch model
+    let g:claudia_config.model = a:new_model
+
+    " Ensure max_tokens doesn't exceed new model's limit
+    let l:max_allowed = s:models_info[a:new_model].max_tokens
+    let g:claudia_config.max_tokens = min([l:current_tokens, l:max_allowed])
+
+    echo "Switched to " . s:models_info[a:new_model].name
+endfunction
+
 function! s:SetTemperature(temp) abort
     let l:temp_float = str2float(a:temp)
     if l:temp_float >= 0.0 && l:temp_float <= 1.0
@@ -220,13 +257,33 @@ function! s:SetTemperature(temp) abort
     endif
 endfunction
 
+function! s:SetMinTemperature() abort
+    let g:claudia_config.temperature = 0.0
+    echo "Set temperature to minimum (0.0)"
+endfunction
+
+function! s:SetMaxTemperature() abort
+    let g:claudia_config.temperature = 1.0
+    echo "Set temperature to maximum (1.0)"
+endfunction
+
 function! s:SetMaxTokens(tokens) abort
     let l:tokens_nr = str2nr(a:tokens)
-    if l:tokens_nr > 0
+    let l:model_max = s:models_info[g:claudia_config.model].max_tokens
+
+    if l:tokens_nr > 0 && l:tokens_nr <= l:model_max
         let g:claudia_config.max_tokens = l:tokens_nr
         echo "claudia max tokens set to " . a:tokens
     else
-        echoerr "Max tokens must be a positive number"
+        echoerr "Max tokens must be between 1 and " . l:model_max
+    endif
+endfunction
+
+function! s:SetMaxTokensToModelMax() abort
+    let l:model = g:claudia_config.model
+    if has_key(s:models_info, l:model)
+        let g:claudia_config.max_tokens = s:models_info[l:model].max_tokens
+        echo "Set max tokens to " . g:claudia_config.max_tokens
     endif
 endfunction
 
@@ -246,11 +303,6 @@ function! s:SetSystemPrompt(input) abort
         let g:claudia_config.system_prompt = a:input
         echo "System prompt set to " . a:input
     endif
-endfunction
-
-function! s:SetModel(model) abort
-    let g:claudia_config.model = a:model
-    echo "claudia model set to " . a:model
 endfunction
 
 " Context Management Functions
@@ -704,7 +756,7 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \     },
                 \     {
                 \         'type': 'text',
-                \         'text': '<instructions:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output.</instructions:text-output>',
+                \         'text': '<instruction:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output. Nothing beyond that column can be read.</instruction:text-output>',
                 \         'cache_control': {'type': 'ephemeral'}
                 \     }
                 \ ]
@@ -1115,6 +1167,11 @@ command! -nargs=1 -complete=file ClaudiaSystemPrompt call s:SetSystemPrompt(<q-a
 command! -nargs=1 ClaudiaModel call s:SetModel(<q-args>)
 command! ClaudiaShowConfig call s:ShowConfig()
 command! ClaudiaResetConfig call s:InitializeConfig()
+command! Claudia140IQ call s:SwitchModel('claude-3-5-sonnet-20241022')
+command! Claudia120IQ call s:SwitchModel('claude-3-5-haiku-20241022')
+command! ClaudiaMaxTokens call s:SetMaxTokensToModelMax()
+command! ClaudiaCoffee call s:SetMinTemperature()
+command! Claudia420 call s:SetMaxTemperature()
 
 " Context management commands
 command! -nargs=1 -complete=file ClaudiaAddContext call s:AddContext(<q-args>)
