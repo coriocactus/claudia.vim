@@ -622,10 +622,6 @@ function! WriteStringAtCursor(str) abort
     " Replace invisible space characters with regular spaces
     let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
 
-    " Fix specific code patterns
-    let l:normalized = substitute(l:normalized, 'class\s*\([A-Za-z0-9_]\+\)', 'class \1', 'g')
-    let l:normalized = substitute(l:normalized, 'def\s*\([A-Za-z0-9_]\+\)', 'def \1', 'g')
-
     " Split into lines, preserving empty lines
     let l:lines = split(l:normalized, '\n', 1)
 
