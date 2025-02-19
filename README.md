@@ -1,65 +1,10 @@
 # claudia.vim
 
-Interact with Anthropic's API directly in Vim.
-Send text and get streaming responses right where you're typing.
-
-## Why
-
-- Alt-Tab? Cmd-Tab? Spaces? No. Stay in the terminal.
-- AIs don’t need breaks--say no to "message limits." (ok, maybe [rate limits](https://docs.anthropic.com/en/api/rate-limits))
-- Keep API keys out of the browser.
-- More AI, less configs.
-- Pay for intelligence, not the messenger.
-
-> #### BANE
-> _(to the vimcels)_<br>
-> Vimcels, take control... take control of your editor. This is the instrument
-> of your liberation.<br><br>
-> _(to claude)_<br>
-> Identify yourself to the world.
-> #### _CLAUDE_
-> claude, next-token predictor.
-> #### BANE
-> _(`git clone https://github.com/cordcivilian/claudia.vim && find claudia.vim
-> -type f -not -path '*/\.git/*' -exec cat {} + > repo.txt`)_<br>
-> And what, what is this?
-> #### _CLAUDE_
-> Yet another AI vim plugin, with a blast radius of 4096 tokens.
-> #### BANE
-> And who can [edit], unburdened by what has been [written]?
-> #### _CLAUDE_
-> Only you.
-> #### BANE
-> _(Plug 'cordcivilian/claudia.vim', praise be junegunn)_<br> Thank you good
-> bot. (wringing its proverbial neck by deleting web chat) Now... The plugin is
-> installed. The plugin is configured. The content of the API key is a mystery,
-> for one of you holds the secret. We come here not as conquerors, but as
-> liberators, to return control of this editor (and the motional joy of
-> copying-and-pasting someone else's solution) to the people. And at the first
-> signs of interference from AI agents - which Github Copilot is not, or of
-> those people attempting to install Cursor or Windsurf, this plugin, this AI
-> wrapper, will unleash claudia. For now, martial law is in effect. Return to
-> your computers, hold your keyboards close, and top-up your Anthropic account.
-> Tomorrow you claim what is rightfully yours.
-> <br><br>[Fragment discovered in /var/log/vimrc.ancient, circa 2025 AD.](https://www.youtube.com/watch?v=XMjB2jjfw8w&t=157s)
-
 ## Credit
 
 This project is a vim rewrite of the following projects:
 - https://github.com/yacineMTB/dingllm.nvim
 - https://github.com/melbaldove/llm.nvim
-
-## Features
-
-- Direct integration with Anthropic API (Claude 3 models)
-- Provide context via file contents [Supported: texts, images, PDFs]
-- Normal mode and Visual mode prompting
-- Streaming responses
-- Stop responses with Escape key
-- Customizable API configurations
-- Context caching for fast and efficient API usage
-- Show exact tokens of current context
-- WIP: Knowledge stack (prepend only relevant parts of context)
 
 ## Usage (with default mappings)
 
@@ -73,6 +18,28 @@ This project is a vim rewrite of the following projects:
 **3. To cancel a response:**
 - Press `Esc` while claudia is responding
 
+## Requirements
+
+- Vim 9+
+- curl
+- Anthropic API key
+
+## Getting Started
+
+### Step 1 Option 1: vim-plug (or your preferred plugin manager)
+```vim
+Plug 'cordcivilian/claudia.vim'
+```
+### Step 1 Option 2: Manual Installation
+```bash
+mkdir -p ~/.vim/pack/plugins/start
+cd ~/.vim/pack/plugins/start
+git clone https://github.com/cordcivilian/claudia.vim.git
+```
+### Step 2: API Key Setup
+```bash
+export ANTHROPIC_API_KEY="your-api-key-here"
+```
 ## Adding Context
 
 You can add file contents as context that will be prepended to every prompt:
@@ -117,31 +84,7 @@ counts for different parts of your input using these commands:
 Use these commands to help you stay within token limits and manage context
 effectively.
 
-## Requirements
-
-- Vim 9+
-- curl
-- Anthropic API key
-
-## Getting Started
-
-### Step 1 Option 1: vim-plug (or your preferred plugin manager)
-```vim
-Plug 'cordcivilian/claudia.vim'
-```
-### Step 1 Option 2: Manual Installation
-```bash
-mkdir -p ~/.vim/pack/plugins/start
-cd ~/.vim/pack/plugins/start
-git clone https://github.com/cordcivilian/claudia.vim.git
-```
-### Step 2: API Key Setup
-```bash
-export ANTHROPIC_API_KEY="your-api-key-here"
-```
 ## Configuration
-
-### Load Time (default configs and bindings shown)
 ```vim
 " Normal mode - uses text from start (of buffer) to cursor
 " This is NOT mapped out of the box if your Normal mode <Leader>c is already in use
@@ -166,9 +109,7 @@ let g:claudia_user_config = {
     \ 'max_tokens': 4096,
     \ 'temperature': 0.75,
     \ }
-```
-### Runtime
-```vim
+
 " Modify configs at runtime
 :Claudia140IQ                                   " Switch to 3.5 sonnet
 :Claudia120IQ                                   " Switch to 3.5 haiku

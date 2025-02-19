@@ -44,6 +44,7 @@ let s:original_cursor_pos = []
 let s:debug_mode = 0
 let s:debug_buffer = []
 let s:max_debug_lines = 1000
+let s:from_visual_mode = 0
 
 " Context management state
 let s:context_entries = []
@@ -970,16 +971,15 @@ endfunction
 
 function! s:TriggerClaudia() abort
     call ResetGlobalState()
-
     let s:original_cursor_pos = getpos('.')
 
-    let l:mode = mode()
-    if l:mode ==# 'v' || l:mode ==# 'V' || l:mode ==# "\<C-V>"
+    if s:from_visual_mode
         let l:prompt = GetVisualSelection()
         let l:end_line = line("'>")
         execute "normal! \<Esc>"
-        call setline(l:end_line + 1, [''])
+        call append(l:end_line, '')
         execute "normal! " . (l:end_line + 1) . "G"
+        let s:from_visual_mode = 0
     else
         let l:prompt = GetLinesUntilCursor()
         call append('.', '')
@@ -1186,6 +1186,11 @@ command! ClaudiaToggleDebug call s:ToggleDebug()
 command! ClaudiaShowDebugLog call s:ShowDebugLog()
 
 " Plugin mappings
+function! s:TriggerVisual() abort
+    let s:from_visual_mode = 1
+    call s:TriggerClaudia()
+endfunction
+
 if !hasmapto('<Plug>ClaudiaTrigger') && empty(maparg('<Leader>c', 'n'))
     nmap <silent> <Leader>c <Plug>ClaudiaTrigger
 endif
@@ -1194,11 +1199,8 @@ if !hasmapto('<Plug>ClaudiaTriggerVisual') && empty(maparg('<Leader>c', 'x'))
     xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
 endif
 
-nnoremap <silent> <script> <Plug>ClaudiaTrigger <SID>Trigger
-nnoremap <silent> <SID>Trigger :call <SID>TriggerClaudia()<CR>
-
-xnoremap <silent> <script> <Plug>ClaudiaTriggerVisual <SID>TriggerVisual
-xnoremap <silent> <SID>TriggerVisual :<C-u>call <SID>TriggerClaudia()<CR>
+nnoremap <silent> <script> <Plug>ClaudiaTrigger :call <SID>TriggerClaudia()<CR>
+xnoremap <silent> <script> <Plug>ClaudiaTriggerVisual :<C-u>call <SID>TriggerVisual()<CR>
 
 " Initialize config on load
 call s:InitializeConfig()
