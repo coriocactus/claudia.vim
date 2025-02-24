@@ -3,8 +3,8 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 let s:models_info = {
-            \ 'claude-3-5-sonnet-20241022': {
-            \ 'name': 'Claude 3.5 Sonnet',
+            \ 'claude-3-7-sonnet-20250219': {
+            \ 'name': 'Claude 3.7 Sonnet',
             \ 'max_tokens': 8192,
             \ 'vision': v:true
             \ },
@@ -20,7 +20,7 @@ if !exists('g:claudia_config')
     let g:claudia_config = {
                 \ 'url': 'https://api.anthropic.com/v1/messages',
                 \ 'api_key_name': 'ANTHROPIC_API_KEY',
-                \ 'model': 'claude-3-5-sonnet-20241022',
+                \ 'model': 'claude-3-7-sonnet-20250219',
                 \ 'system_prompt': '',
                 \ 'max_tokens': 4096,
                 \ 'temperature': 0.75,
