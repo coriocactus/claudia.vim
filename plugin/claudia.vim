@@ -950,7 +950,7 @@ function! HandleAnthropicData(data) abort
                         call WriteStringAtCursor(l:delta.text)
                     elseif l:delta_type ==# 'thinking_delta' && has_key(l:delta, 'thinking')
                         call s:DebugLog("Writing thinking delta: " . l:delta.thinking)
-                        call WriteStringAtCursor('[Thinking] ' . l:delta.thinking)
+                        call WriteStringAtCursor(l:delta.thinking)
                     elseif l:delta_type ==# 'signature_delta'
                         call s:DebugLog("Received signature delta")
                     else
