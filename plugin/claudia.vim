@@ -2,28 +2,14 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
-let s:models_info = {
-            \ 'claude-3-7-sonnet-20250219': {
-            \ 'name': 'Claude 3.7 Sonnet',
-            \ 'max_tokens': 8192,
-            \ 'vision': v:true
-            \ },
-            \ 'claude-3-5-haiku-20241022': {
-            \ 'name': 'Claude 3.5 Haiku',
-            \ 'max_tokens': 8192,
-            \ 'vision': v:false
-            \ }
-            \ }
-
-" Global configuration dictionary - Must be defined before global state
 if !exists('g:claudia_config')
     let g:claudia_config = {
                 \ 'url': 'https://api.anthropic.com/v1/messages',
                 \ 'api_key_name': 'ANTHROPIC_API_KEY',
                 \ 'model': 'claude-3-7-sonnet-20250219',
-                \ 'system_prompt': '',
-                \ 'max_tokens': 4096,
-                \ 'temperature': 0.75,
+                \ 'system_prompt': 'You are a helpful assistant.',
+                \ 'max_tokens': 8192,
+                \ 'temperature': 0.75
                 \ }
 endif
 
@@ -45,6 +31,7 @@ let s:debug_mode = 0
 let s:debug_buffer = []
 let s:max_debug_lines = 1000
 let s:from_visual_mode = 0
+let s:reasoning_level = 0
 
 " Context management state
 let s:context_entries = []
@@ -201,11 +188,9 @@ function! s:LoadSystemPrompt() abort
             call s:DebugLog("Loaded system prompt from " . l:system_file)
         catch
             call s:DebugLog("Error loading system prompt: " . v:exception)
-            let g:claudia_config.system_prompt = 'You are a helpful assistant.'
         endtry
     else
         call s:DebugLog("System prompt file not found: " . l:system_file)
-        let g:claudia_config.system_prompt = 'You are a helpful assistant.'
     endif
 endfunction
 
@@ -213,14 +198,21 @@ function! s:InitializeConfig() abort
     call s:LoadSystemPrompt()
     let l:user_config = get(g:, 'claudia_user_config', {})
     let g:claudia_config = extend(copy(g:claudia_config), l:user_config)
+    call s:SetReasoningMode(0)
 endfunction
 
 function! s:ShowConfig() abort
     echo printf("%-15s %s", "URL:", g:claudia_config.url)
     echo printf("%-15s %s", "Model:", g:claudia_config.model)
-    echo printf("%-15s %s", "System Prompt:", g:claudia_config.system_prompt)
     echo printf("%-15s %d", "Max Tokens:", g:claudia_config.max_tokens)
     echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
+    let l:reasoning_labels = ['Disabled', 'Medium (16K budget)', 'Heavy (32K budget)']
+    if exists('s:reasoning_level') && s:reasoning_level >= 0 && s:reasoning_level <= 2
+        echo printf("%-15s %s (Level %d)", "Reasoning:", l:reasoning_labels[s:reasoning_level], s:reasoning_level)
+    else
+        echo printf("%-15s %s", "Reasoning:", "Disabled")
+    endif
+    echo printf("%-15s %s", "System Prompt:", g:claudia_config.system_prompt)
 endfunction
 
 function! s:SetTemperature(temp) abort
@@ -235,14 +227,8 @@ endfunction
 
 function! s:SetMaxTokens(tokens) abort
     let l:tokens_nr = str2nr(a:tokens)
-    let l:model_max = s:models_info[g:claudia_config.model].max_tokens
-
-    if l:tokens_nr > 0 && l:tokens_nr <= l:model_max
-        let g:claudia_config.max_tokens = l:tokens_nr
-        echo "claudia max tokens set to " . a:tokens
-    else
-        echoerr "Max tokens must be between 1 and " . l:model_max
-    endif
+    let g:claudia_config.max_tokens = l:tokens_nr
+    echo "claudia max tokens set to " . a:tokens
 endfunction
 
 function! s:SetSystemPrompt(input) abort
@@ -260,6 +246,28 @@ function! s:SetSystemPrompt(input) abort
     else
         let g:claudia_config.system_prompt = a:input
         echo "System prompt set to " . a:input
+    endif
+endfunction
+
+function! s:SetReasoningMode(level) abort
+    let l:level = str2nr(a:level)
+
+    if l:level == 0
+        " No thinking, default settings
+        let s:reasoning_level = 0
+        let g:claudia_config.max_tokens = 8192
+    elseif l:level == 1
+        " Medium thinking with 64K output
+        let s:reasoning_level = 1
+        let g:claudia_config.max_tokens = 64000
+        echo "Extended thinking enabled (level 1). Using 64K max tokens with 16K thinking budget."
+    elseif l:level == 2
+        " Heavy thinking with 128K output via beta
+        let s:reasoning_level = 2
+        let g:claudia_config.max_tokens = 128000
+        echo "Extended thinking enabled (level 2). Using 128K max tokens with 32K thinking budget."
+    else
+        echoerr "Invalid reasoning level. Please use 0 (disabled), 1 (medium), or 2 (heavy)."
     endif
 endfunction
 
@@ -643,8 +651,8 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 if !empty(l:content)
                     call s:DebugLog("Adding text content block")
                     let l:block = {
-                                \ 'type': 'text',
-                                \ 'text': l:content
+                                \   'type': 'text',
+                                \   'text': l:content
                                 \ }
 
                     " Add cache control if content is cached
@@ -659,10 +667,10 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 let l:block = {
                             \ 'type': entry.media_type =~# '^image/' ? 'image' : 'document',
                             \ 'source': {
-                            \ 'type': 'base64',
-                            \ 'media_type': entry.media_type,
-                            \ 'data': l:content
-                            \ }
+                            \   'type': 'base64',
+                            \   'media_type': entry.media_type,
+                            \   'data': l:content
+                            \   }
                             \ }
 
                 " Add cache control if content is cached
@@ -721,6 +729,14 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \ ]
                 \ }
 
+    if s:reasoning_level >= 1
+        let l:thinking_budget = s:reasoning_level == 1 ? 16000 : 32000
+        let l:data.thinking = {
+                    \ 'type': 'enabled',
+                    \ 'budget_tokens': l:thinking_budget
+                    \ }
+    endif
+
     " Log sanitized request data with preserved structure
     let l:debug_data = s:SanitizeForDebug(l:data)
     call s:DebugLog("Request data structure: " . string(l:debug_data))
@@ -731,6 +747,11 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \ 'x-api-key: ' . l:api_key,
                 \ 'anthropic-version: 2023-06-01'
                 \ ]
+
+    " Add beta header for extended output if enabled
+    if s:reasoning_level == 2
+        call add(l:headers, 'anthropic-beta: output-128k-2025-02-19')
+    endif
 
     let l:args = ['-N', '-X', 'POST']
 
@@ -975,6 +996,9 @@ command! -nargs=1 -complete=file ClaudiaSystemPrompt call s:SetSystemPrompt(<q-a
 command! -nargs=1 ClaudiaTemp call s:SetTemperature(<q-args>)
 command! -nargs=1 ClaudiaTokens call s:SetMaxTokens(<q-args>)
 command! ClaudiaResetConfig call s:InitializeConfig()
+
+" Reasoning mode commands
+command! -nargs=1 ClaudiaReason call s:SetReasoningMode(<args>)
 
 " Context management commands
 command! -nargs=1 -complete=file ClaudiaAddContext call s:AddContext(<q-args>)
