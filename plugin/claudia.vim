@@ -705,7 +705,7 @@ function! MakeAnthropicCurlArgs(prompt) abort
 
     " Get the wrap column
     let l:wrap_col = s:GetWrapColumn()
-    let l:instruction_text = 'Maintain a strict line length of less than ' . (l:wrap_col + 1) . '.'
+    let l:instruction_text = 'Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' (thinking and text, both).'
     let l:repeated_instruction = ''
     for i in range(5)
         let l:repeated_instruction .= l:instruction_text . ' '
