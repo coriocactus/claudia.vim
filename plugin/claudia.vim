@@ -952,7 +952,7 @@ function! HandleAnthropicData(data) abort
                     call s:DebugLog("Starting thinking block")
                     let s:in_thinking_block = 1
                     let s:thinking_content = ''
-                    call WriteStringAtCursor("<thinking>")
+                    call WriteStringAtCursor("<thinking>\n")
                 endif
             endif
 
@@ -982,11 +982,11 @@ function! HandleAnthropicData(data) abort
             " Track thinking block end and handle transition to regular content
             if l:event_type ==# 'content_block_stop' && s:in_thinking_block
                 call s:DebugLog("Ending thinking block")
-                call WriteStringAtCursor("</thinking>")
+                call WriteStringAtCursor("\n</thinking>\n")
                 let s:in_thinking_block = 0
 
                 " Add line break and empty line after thinking block
-                call WriteStringAtCursor("\n\n")
+                call WriteStringAtCursor("\n")
             endif
         catch
             call s:DebugLog("JSON parse error: " . v:exception)
