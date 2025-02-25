@@ -694,6 +694,11 @@ function! MakeAnthropicCurlArgs(prompt) abort
 
     " Get the wrap column
     let l:wrap_col = s:GetWrapColumn()
+    let l:instruction_text = 'Maintain a strict line length of less than ' . (l:wrap_col + 1) . '.'
+    let l:repeated_instruction = ''
+    for i in range(5)
+        let l:repeated_instruction .= l:instruction_text . ' '
+    endfor
 
     " Build request data
     let l:data = {
@@ -710,7 +715,7 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \     },
                 \     {
                 \         'type': 'text',
-                \         'text': '<wrap>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output. Nothing beyond that column can be read.</wrap>',
+                \         'text': '<instruction+>' . l:repeated_instruction . '</instruction+>',
                 \         'cache_control': {'type': 'ephemeral'}
                 \     }
                 \ ]

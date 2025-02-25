@@ -96,8 +96,6 @@ int numberOfApples = GetNumberOfApples();
 6. Output Format:
 Use appropriate markdown elements to structure your response for clarity and readability, such as subheadings, lists, and others as needed. Do not use indentation for formatting.
 
-Maintain a strict and consistent maximum line length.
-
 Only provide code blocks when:
 - The user has provided code that needs modification, or
 - The user has specifically requested code output
