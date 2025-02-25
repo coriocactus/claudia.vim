@@ -902,6 +902,12 @@ function! HandleAnthropicData(data) abort
     call s:DebugLog("Handling response data of length: " . len(a:data))
     call s:DebugLog("Raw response: " . a:data)
 
+    " Variables to track thinking block state
+    if !exists('s:in_thinking_block')
+        let s:in_thinking_block = 0
+        let s:thinking_content = ''
+    endif
+
     " Split the input into individual events
     let l:events = split(a:data, "event: ")
     call s:DebugLog("Number of events: " . len(l:events))
@@ -939,6 +945,17 @@ function! HandleAnthropicData(data) abort
                 return
             endif
 
+            " Track thinking block start
+            if l:event_type ==# 'content_block_start' && has_key(l:json, 'content_block')
+                let l:block = l:json.content_block
+                if has_key(l:block, 'type') && l:block.type ==# 'thinking'
+                    call s:DebugLog("Starting thinking block")
+                    let s:in_thinking_block = 1
+                    let s:thinking_content = ''
+                    call WriteStringAtCursor("<thinking>")
+                endif
+            endif
+
             " Handle various delta event types
             if l:event_type ==# 'content_block_delta'
                 if has_key(l:json, 'delta')
@@ -950,6 +967,7 @@ function! HandleAnthropicData(data) abort
                         call WriteStringAtCursor(l:delta.text)
                     elseif l:delta_type ==# 'thinking_delta' && has_key(l:delta, 'thinking')
                         call s:DebugLog("Writing thinking delta: " . l:delta.thinking)
+                        let s:thinking_content .= l:delta.thinking
                         call WriteStringAtCursor(l:delta.thinking)
                     elseif l:delta_type ==# 'signature_delta'
                         call s:DebugLog("Received signature delta")
@@ -959,6 +977,16 @@ function! HandleAnthropicData(data) abort
                 else
                     call s:DebugLog("No delta in JSON: " . string(keys(l:json)))
                 endif
+            endif
+
+            " Track thinking block end and handle transition to regular content
+            if l:event_type ==# 'content_block_stop' && s:in_thinking_block
+                call s:DebugLog("Ending thinking block")
+                call WriteStringAtCursor("</thinking>")
+                let s:in_thinking_block = 0
+
+                " Add line break and empty line after thinking block
+                call WriteStringAtCursor("\n\n")
             endif
         catch
             call s:DebugLog("JSON parse error: " . v:exception)
