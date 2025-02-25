@@ -781,8 +781,7 @@ function! JobOutCallback(channel, msg)
     call s:DebugLog("Chunk length: " . len(a:msg))
     call s:DebugLog("First 100 chars: " . strpart(a:msg, 0, 100))
 
-    " Pass all messages to HandleAnthropicData for processing
-    call HandleAnthropicData(a:msg, 'content_block_delta')
+    call HandleAnthropicData(a:msg)
 endfunction
 
 function! JobErrCallback(channel, msg)
@@ -896,7 +895,7 @@ function! s:HandleAPIError(error) abort
     call CancelJob()
 endfunction
 
-function! HandleAnthropicData(data, event_state) abort
+function! HandleAnthropicData(data) abort
     call s:DebugLog("Handling response data of length: " . len(a:data))
     call s:DebugLog("Raw response: " . a:data)
 
@@ -937,12 +936,25 @@ function! HandleAnthropicData(data, event_state) abort
                 return
             endif
 
+            " Handle various delta event types
             if l:event_type ==# 'content_block_delta'
-                if has_key(l:json, 'delta') && has_key(l:json.delta, 'text')
-                    call s:DebugLog("Writing delta text: " . l:json.delta.text)
-                    call WriteStringAtCursor(l:json.delta.text)
+                if has_key(l:json, 'delta')
+                    let l:delta = l:json.delta
+                    let l:delta_type = get(l:delta, 'type', '')
+
+                    if l:delta_type ==# 'text_delta' && has_key(l:delta, 'text')
+                        call s:DebugLog("Writing text delta: " . l:delta.text)
+                        call WriteStringAtCursor(l:delta.text)
+                    elseif l:delta_type ==# 'thinking_delta' && has_key(l:delta, 'thinking')
+                        call s:DebugLog("Writing thinking delta: " . l:delta.thinking)
+                        call WriteStringAtCursor('[Thinking] ' . l:delta.thinking)
+                    elseif l:delta_type ==# 'signature_delta'
+                        call s:DebugLog("Received signature delta")
+                    else
+                        call s:DebugLog("Unknown delta type: " . l:delta_type)
+                    endif
                 else
-                    call s:DebugLog("No delta.text in JSON: " . string(keys(l:json)))
+                    call s:DebugLog("No delta in JSON: " . string(keys(l:json)))
                 endif
             endif
         catch
