@@ -32,6 +32,7 @@ let s:debug_buffer = []
 let s:max_debug_lines = 1000
 let s:from_visual_mode = 0
 let s:reasoning_level = 0
+let s:saved_temperature = get(g:claudia_config, 'temperature', 0.75)
 
 " Context management state
 let s:context_entries = []
