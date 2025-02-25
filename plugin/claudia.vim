@@ -223,31 +223,6 @@ function! s:ShowConfig() abort
     echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
 endfunction
 
-function! s:SetModel(model) abort
-    let g:claudia_config.model = a:model
-    echo "claudia model set to " . a:model
-endfunction
-
-function! s:SwitchModel(new_model) abort
-    if !has_key(s:models_info, a:new_model)
-        echoerr "Invalid model: " . a:new_model
-        return
-    endif
-
-    " Store current settings
-    let l:current_temp = g:claudia_config.temperature
-    let l:current_tokens = g:claudia_config.max_tokens
-
-    " Switch model
-    let g:claudia_config.model = a:new_model
-
-    " Ensure max_tokens doesn't exceed new model's limit
-    let l:max_allowed = s:models_info[a:new_model].max_tokens
-    let g:claudia_config.max_tokens = min([l:current_tokens, l:max_allowed])
-
-    echo "Switched to " . s:models_info[a:new_model].name
-endfunction
-
 function! s:SetTemperature(temp) abort
     let l:temp_float = str2float(a:temp)
     if l:temp_float >= 0.0 && l:temp_float <= 1.0
@@ -256,16 +231,6 @@ function! s:SetTemperature(temp) abort
     else
         echoerr "Temperature must be between 0.0 and 1.0"
     endif
-endfunction
-
-function! s:SetMinTemperature() abort
-    let g:claudia_config.temperature = 0.0
-    echo "Set temperature to minimum (0.0)"
-endfunction
-
-function! s:SetMaxTemperature() abort
-    let g:claudia_config.temperature = 1.0
-    echo "Set temperature to maximum (1.0)"
 endfunction
 
 function! s:SetMaxTokens(tokens) abort
@@ -277,14 +242,6 @@ function! s:SetMaxTokens(tokens) abort
         echo "claudia max tokens set to " . a:tokens
     else
         echoerr "Max tokens must be between 1 and " . l:model_max
-    endif
-endfunction
-
-function! s:SetMaxTokensToModelMax() abort
-    let l:model = g:claudia_config.model
-    if has_key(s:models_info, l:model)
-        let g:claudia_config.max_tokens = s:models_info[l:model].max_tokens
-        echo "Set max tokens to " . g:claudia_config.max_tokens
     endif
 endfunction
 
@@ -753,7 +710,7 @@ function! MakeAnthropicCurlArgs(prompt) abort
                 \     },
                 \     {
                 \         'type': 'text',
-                \         'text': '<instruction:text-output>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output. Nothing beyond that column can be read.</instruction:text-output>',
+                \         'text': '<wrap>Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' for non-code output. Nothing beyond that column can be read.</wrap>',
                 \         'cache_control': {'type': 'ephemeral'}
                 \     }
                 \ ]
@@ -1007,163 +964,12 @@ function! s:TriggerClaudia() abort
     nnoremap <silent> <Esc> :call CancelJob()<CR>
 endfunction
 
-" Token count functions
-function! s:MakeTokenCountRequest(content_blocks) abort
-    " Build request data
-    let l:data = {
-                \ 'messages': [{'role': 'user', 'content': a:content_blocks}],
-                \ 'model': g:claudia_config.model,
-                \ 'system': [{'type': 'text', 'text': g:claudia_config.system_prompt}]
-                \ }
-
-    " Build curl command
-    let l:cmd = printf('curl -s -X POST %s --header "x-api-key: %s" '
-                \ . '--header "content-type: application/json" '
-                \ . '--header "anthropic-version: 2023-06-01" '
-                \ . '--data %s',
-                \ shellescape('https://api.anthropic.com/v1/messages/count_tokens'),
-                \ eval('$' . g:claudia_config.api_key_name),
-                \ shellescape(json_encode(l:data)))
-
-    " Execute curl and get response directly
-    let l:response = system(l:cmd)
-
-    try
-        let l:json = json_decode(l:response)
-        return get(l:json, 'input_tokens', -1)
-    catch
-        return -1
-    endtry
-endfunction
-
-function! s:GetContextTokens() abort
-    if empty(s:context_entries)
-        return 0
-    endif
-
-    let l:content_blocks = []
-
-    " Process context entries
-    for entry in s:context_entries
-        try
-            let l:content = ''
-            if has_key(s:context_cache, entry.id)
-                let l:content = s:context_cache[entry.id]
-            else
-                let l:content = s:LoadFileWithProgress(entry.expanded_path, entry.type)
-            endif
-
-            if entry.type ==# 'text'
-                if !empty(l:content)
-                    call add(l:content_blocks, {
-                                \ 'type': 'text',
-                                \ 'text': l:content
-                                \ })
-                endif
-            elseif entry.type ==# 'media'
-                call add(l:content_blocks, {
-                            \ 'type': entry.media_type =~# '^image/' ? 'image' : 'document',
-                            \ 'source': {
-                            \ 'type': 'base64',
-                            \ 'media_type': entry.media_type,
-                            \ 'data': l:content
-                            \ }
-                            \ })
-            endif
-        catch
-            echohl ErrorMsg
-            echo "Error processing context " . entry.filepath . ": " . v:exception
-            echohl None
-            return -1
-        endtry
-    endfor
-
-    return s:MakeTokenCountRequest(l:content_blocks)
-endfunction
-
-function! s:GetNormalTokens() abort
-    let l:content = GetLinesUntilCursor()
-    return s:MakeTokenCountRequest([{'type': 'text', 'text': l:content}])
-endfunction
-
-function! s:GetVisualTokens() range abort
-    let [l:line_start, l:column_start] = getpos("'<")[1:2]
-    let [l:line_end, l:column_end] = getpos("'>")[1:2]
-    let l:lines = getline(l:line_start, l:line_end)
-
-    if visualmode() ==# 'v'
-        let l:lines[-1] = l:lines[-1][: l:column_end - 1]
-        let l:lines[0] = l:lines[0][l:column_start - 1:]
-    elseif visualmode() ==# 'V'
-    " Line-wise visual mode - no modification needed
-    elseif visualmode() ==# "\<C-V>"
-        let l:new_lines = []
-        for l:line in l:lines
-            call add(l:new_lines, l:line[l:column_start - 1 : l:column_end - 1])
-        endfor
-        let l:lines = l:new_lines
-    endif
-
-    let l:content = join(l:lines, "\n")
-    return s:MakeTokenCountRequest([{'type': 'text', 'text': l:content}])
-endfunction
-
-function! s:ShowContextCost() abort
-    if empty(s:context_entries)
-        echo "No context files loaded"
-        return
-    endif
-
-    let l:tokens = s:GetContextTokens()
-    if l:tokens >= 0
-        echo "Context files token count: " . l:tokens
-    else
-        echohl ErrorMsg
-        echo "Failed to get token count"
-        echohl None
-    endif
-endfunction
-
-function! s:ShowNormalCost() abort
-    let l:tokens = s:GetNormalTokens()
-    if l:tokens >= 0
-        echo "Current buffer token count: " . l:tokens
-    else
-        echohl ErrorMsg
-        echo "Failed to get token count"
-        echohl None
-    endif
-endfunction
-
-function! s:ShowVisualCost() range abort
-    let l:mode = visualmode()
-    if empty(l:mode)
-        echo "Not in visual mode"
-        return
-    endif
-
-    let l:tokens = s:GetVisualTokens()
-    if l:tokens >= 0
-        echo "Selection token count: " . l:tokens
-    else
-        echohl ErrorMsg
-        echo "Failed to get token count"
-        echohl None
-    endif
-endfunction
-
 " Commands for runtime configuration
+command! ClaudiaShowConfig call s:ShowConfig()
+command! -nargs=1 -complete=file ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
 command! -nargs=1 ClaudiaTemp call s:SetTemperature(<q-args>)
 command! -nargs=1 ClaudiaTokens call s:SetMaxTokens(<q-args>)
-command! -nargs=1 -complete=file ClaudiaSystemPrompt call s:SetSystemPrompt(<q-args>)
-command! -nargs=1 ClaudiaModel call s:SetModel(<q-args>)
-command! ClaudiaShowConfig call s:ShowConfig()
 command! ClaudiaResetConfig call s:InitializeConfig()
-command! Claudia140IQ call s:SwitchModel('claude-3-5-sonnet-20241022')
-command! Claudia120IQ call s:SwitchModel('claude-3-5-haiku-20241022')
-command! ClaudiaMaxTokens call s:SetMaxTokensToModelMax()
-command! ClaudiaCoffee call s:SetMinTemperature()
-command! Claudia420 call s:SetMaxTemperature()
 
 " Context management commands
 command! -nargs=1 -complete=file ClaudiaAddContext call s:AddContext(<q-args>)
@@ -1175,11 +981,6 @@ command! ClaudiaClearContext call s:ClearContext()
 command! -nargs=1 ClaudiaCacheContext call s:CacheContext(<q-args>)
 command! -nargs=1 ClaudiaUncacheContext call s:UncacheContext(<q-args>)
 command! ClaudiaClearCache call s:ClearCache()
-
-" Token count commands
-command! ClaudiaContextCost call s:ShowContextCost()
-command! ClaudiaNormalCost call s:ShowNormalCost()
-command! -range ClaudiaVisualCost call s:ShowVisualCost()
 
 " Debug commands
 command! ClaudiaToggleDebug call s:ToggleDebug()

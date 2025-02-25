@@ -18,12 +18,6 @@ This project is a vim rewrite of the following projects:
 **3. To cancel a response:**
 - Press `Esc` while claudia is responding
 
-## Requirements
-
-- Vim 9+
-- curl
-- Anthropic API key
-
 ## Getting Started
 
 ### Step 1 Option 1: vim-plug (or your preferred plugin manager)
@@ -72,18 +66,6 @@ claudia uses a system prompt to define its core behavior and capabilities. The
 default system prompt is loaded from the `system.md` file in the plugin
 directory.
 
-## Token Counting
-
-Claude limits the total number of input tokens per request. You can check token
-counts for different parts of your input using these commands:
-```vim
-:ClaudiaContextCost " Shows token count for all loaded context files (excluding prompts)
-:ClaudiaNormalCost  " Shows token count for text from start of file to cursor (excluding context)
-:ClaudiaVisualCost  " Shows token count for current visual selection (excluding context)
-```
-Use these commands to help you stay within token limits and manage context
-effectively.
-
 ## Configuration
 ```vim
 " Normal mode - uses text from start (of buffer) to cursor
@@ -111,20 +93,11 @@ let g:claudia_user_config = {
     \ }
 
 " Modify configs at runtime
-:Claudia140IQ                                   " Switch to 3.5 sonnet
-:Claudia120IQ                                   " Switch to 3.5 haiku
-:ClaudiaModel claude-3-opus-20240229            " Switch to 3.0 opus
-
 :ClaudiaSystemPrompt Pretend you are sentient.  " Set system prompt
 :ClaudiaSystemPrompt ~/path/to/system.md        " Set system prompt from file
-
-:ClaudiaMaxTokens                               " Max output
-:ClaudiaTokens 1024                             " Set max tokens to 1024
-
-:ClaudiaCoffee                                  " Set temperature to 0
-:Claudia420                                     " Set temperature to 1
+:ClaudiaMaxTokens                               " Max output tokens
+:ClaudiaTokens 1024                             " Set max output tokens to 1024
 :ClaudiaTemp 0.25                               " Set temperature to 0.25
-
-:ClaudiaResetConfig
 :ClaudiaShowConfig
+:ClaudiaResetConfig
 ```
