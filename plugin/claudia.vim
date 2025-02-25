@@ -206,6 +206,7 @@ function! s:ShowConfig() abort
     echo printf("%-15s %s", "Model:", g:claudia_config.model)
     echo printf("%-15s %d", "Max Tokens:", g:claudia_config.max_tokens)
     echo printf("%-15s %.2f", "Temperature:", g:claudia_config.temperature)
+
     let l:reasoning_labels = ['Disabled', 'Medium (16K budget)', 'Heavy (32K budget)']
     if exists('s:reasoning_level') && s:reasoning_level >= 0 && s:reasoning_level <= 2
         echo printf("%-15s %s (Level %d)", "Reasoning:", l:reasoning_labels[s:reasoning_level], s:reasoning_level)
@@ -251,20 +252,21 @@ endfunction
 
 function! s:SetReasoningMode(level) abort
     let l:level = str2nr(a:level)
-
     if l:level == 0
-        " No thinking, default settings
         let s:reasoning_level = 0
         let g:claudia_config.max_tokens = 8192
+        let g:claudia_config.temperature = s:saved_temperature
     elseif l:level == 1
-        " Medium thinking with 64K output
+        let s:saved_temperature = g:claudia_config.temperature
         let s:reasoning_level = 1
         let g:claudia_config.max_tokens = 64000
+        let g:claudia_config.temperature = 1.0
         echo "Extended thinking enabled (level 1). Using 64K max tokens with 16K thinking budget."
     elseif l:level == 2
-        " Heavy thinking with 128K output via beta
+        let s:saved_temperature = g:claudia_config.temperature
         let s:reasoning_level = 2
         let g:claudia_config.max_tokens = 128000
+        let g:claudia_config.temperature = 1.0
         echo "Extended thinking enabled (level 2). Using 128K max tokens with 32K thinking budget."
     else
         echoerr "Invalid reasoning level. Please use 0 (disabled), 1 (medium), or 2 (heavy)."
