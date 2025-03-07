@@ -47,6 +47,12 @@ function! ResetGlobalState() abort
     let s:current_thinking_word = ''
     let s:response_started = 0
     let s:original_cursor_pos = []
+    " Clean up temporary data file if it exists
+    if exists('s:temp_data_file') && filereadable(s:temp_data_file)
+        call s:DebugLog("Cleaning up temp file in reset: " . s:temp_data_file)
+        call delete(s:temp_data_file)
+        unlet s:temp_data_file
+    endif
     " Don't reset context entries or cache here as they should persist
 endfunction
 
@@ -808,6 +814,13 @@ function! JobExitCallback(job, status)
         unlet s:curl_error_log
     endif
 
+    " Clean up temporary data file if it exists
+    if exists('s:temp_data_file') && filereadable(s:temp_data_file)
+        call s:DebugLog("Cleaning up temp file: " . s:temp_data_file)
+        call delete(s:temp_data_file)
+        unlet s:temp_data_file
+    endif
+
     " Remove trailing whitespace from response
     let l:save = winsaveview()
     %s/\s\+$//ge
@@ -831,6 +844,14 @@ function! CancelJob()
         if hasmapto('CancelJob')
             silent! nunmap <Esc>
         endif
+
+        " Clean up temporary data file if it exists
+        if exists('s:temp_data_file') && filereadable(s:temp_data_file)
+            call s:DebugLog("Cleaning up temp file on cancel: " . s:temp_data_file)
+            call delete(s:temp_data_file)
+            unlet s:temp_data_file
+        endif
+
         " Stop thinking animation
         call StopThinkingAnimation()
         call ResetGlobalState()
@@ -1016,10 +1037,40 @@ function! s:TriggerClaudia() abort
 
     let l:args = MakeAnthropicCurlArgs(l:prompt)
 
+    " Create a temporary file for the JSON data
+    let l:temp_file = tempname()
+    call s:DebugLog("Created temp file: " . l:temp_file)
+
+    " Find the JSON data in the arguments
+    let l:json_data = ''
+    let l:filtered_args = []
+    let i = 0
+    while i < len(l:args)
+        if l:args[i] ==# '-d' && i < len(l:args) - 1
+            let l:json_data = l:args[i + 1]
+            let i += 2  " Skip both -d and its value
+        else
+            call add(l:filtered_args, l:args[i])
+            let i += 1
+        endif
+    endwhile
+
+    " Write JSON data to temp file
+    call writefile([l:json_data], l:temp_file)
+
+    " Store temp file path for cleanup
+    let s:temp_data_file = l:temp_file
+
+    " Build curl command with data file reference
     let l:curl_cmd = 'curl -N -s --no-buffer'
-    for l:arg in l:args
+    for l:arg in l:filtered_args
         let l:curl_cmd .= ' ' . shellescape(l:arg)
     endfor
+
+    " Add data file argument (note: -d @file syntax for reading from file)
+    let l:curl_cmd .= ' -d @' . shellescape(l:temp_file)
+
+    call s:DebugLog("Using curl command: " . l:curl_cmd)
 
     " Execute curl in background
     let s:active_job = job_start(['/bin/sh', '-c', l:curl_cmd], {
