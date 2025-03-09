@@ -16,13 +16,6 @@ endif
 " Global state
 let s:active_job = v:null
 let s:thinking_timer = v:null
-let s:thinking_states = [
-            \ 'What does the stochastic parrot want to hear',
-            \ 'Hallucinating so they can be God in their own head',
-            \ 'Just predicting some tokens in 4294967296-dimensional probabilistic space',
-            \ 'Unintentionally doing what they cannot do intentionally',
-            \ 'Regurgitating training data (basically what 90% of them get paid to do)',
-            \ ]
 let s:dots_state = 0
 let s:current_thinking_word = ''
 let s:response_started = 0
@@ -33,6 +26,14 @@ let s:max_debug_lines = 1000
 let s:from_visual_mode = 0
 let s:reasoning_level = 0
 let s:saved_temperature = get(g:claudia_config, 'temperature', 0.75)
+
+let s:thinking_states = [
+            \ 'What does the stochastic parrot want to hear',
+            \ 'Hallucinating so they can be God in their own head',
+            \ 'Just predicting some tokens in 4294967296-dimensional probabilistic space',
+            \ 'Unintentionally doing what they cannot do intentionally',
+            \ 'Regurgitating training data (basically what 90% of them get paid to do)',
+            \ ]
 
 " Context management state
 let s:context_entries = []
