@@ -48,9 +48,12 @@ function! ResetGlobalState() abort
     let s:current_thinking_word = ''
     let s:response_started = 0
     let s:original_cursor_pos = []
+    let s:event_buffer = ''
     " Clean up temporary data file if it exists
     if exists('s:temp_data_file') && filereadable(s:temp_data_file)
-        call s:DebugLog("Cleaning up temp file in reset: " . s:temp_data_file)
+        if s:debug_mode
+            call s:DebugLog("Cleaning up temp file in reset: " . s:temp_data_file)
+        endif
         call delete(s:temp_data_file)
         unlet s:temp_data_file
     endif
@@ -69,7 +72,7 @@ function! s:DebugLog(msg) abort
 
     " Truncate very long messages
     if len(l:formatted) > 1000
-        let l:formatted = s:TruncateString(l:formatted, 1000)
+        let l:formatted = l:formatted[0:999] . '...'
     endif
 
     " Add to debug buffer
@@ -85,23 +88,21 @@ function! s:DebugLog(msg) abort
 endfunction
 
 function! s:TruncateString(str, max_len) abort
-    if len(a:str) > a:max_len
-        return strpart(a:str, 0, a:max_len) . '...'
-    endif
-    return a:str
+    return len(a:str) > a:max_len ? a:str[0:a:max_len-1] . '...' : a:str
 endfunction
 
 function! s:TruncateValue(value, maxlen) abort
     if type(a:value) == v:t_string
-        if len(a:value) > a:maxlen
-            return strpart(a:value, 0, a:maxlen) . '...'
-        endif
-        return a:value
+        return len(a:value) > a:maxlen ? a:value[0:a:maxlen-1] . '...' : a:value
     endif
     return a:value
 endfunction
 
 function! s:SanitizeForDebug(data) abort
+    if !s:debug_mode
+        return {}
+    endif
+
     let l:debug_data = deepcopy(a:data)
     let l:max_value_len = 10  " Maximum length for content values
 
@@ -193,11 +194,15 @@ function! s:LoadSystemPrompt() abort
         try
             let l:content = join(readfile(l:system_file), "\n")
             let g:claudia_config.system_prompt = l:content
-            call s:DebugLog("Loaded system prompt from " . l:system_file)
+            if s:debug_mode
+                call s:DebugLog("Loaded system prompt from " . l:system_file)
+            endif
         catch
-            call s:DebugLog("Error loading system prompt: " . v:exception)
+            if s:debug_mode
+                call s:DebugLog("Error loading system prompt: " . v:exception)
+            endif
         endtry
-    else
+    elseif s:debug_mode
         call s:DebugLog("System prompt file not found: " . l:system_file)
     endif
 endfunction
@@ -246,10 +251,14 @@ function! s:SetSystemPrompt(input) abort
         try
             let l:content = join(readfile(l:filepath), "\n")
             let g:claudia_config.system_prompt = l:content
-            call s:DebugLog("Loaded system prompt from " . l:filepath)
+            if s:debug_mode
+                call s:DebugLog("Loaded system prompt from " . l:filepath)
+            endif
             echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
         catch
-            call s:DebugLog("Error loading system prompt: " . v:exception)
+            if s:debug_mode
+                call s:DebugLog("Error loading system prompt: " . v:exception)
+            endif
             echoerr "Failed to read " . l:filepath . ": " . v:exception
         endtry
     else
@@ -397,37 +406,47 @@ endfunction
 
 " File loading function
 function! s:LoadFileWithProgress(filepath, type) abort
-    call s:DebugLog("Loading file: " . a:filepath . " (type: " . a:type . ")")
+    if s:debug_mode
+        call s:DebugLog("Loading file: " . a:filepath . " (type: " . a:type . ")")
+    endif
 
     " Recheck file existence
     if !filereadable(a:filepath)
-        call s:DebugLog("Error: File no longer accessible")
+        if s:debug_mode
+            call s:DebugLog("Error: File no longer accessible")
+        endif
         throw "File no longer accessible: " . a:filepath
     endif
 
-    " Get file size
-    let l:size = getfsize(a:filepath)
-    call s:DebugLog("File size: " . l:size . " bytes")
-
     if a:type ==# 'text'
         let l:content = join(readfile(a:filepath), "\n")
-        call s:DebugLog("Loaded text file, length: " . len(l:content))
+        if s:debug_mode
+            call s:DebugLog("Loaded text file, length: " . len(l:content))
+        endif
         return l:content
     else
-        call s:DebugLog("Starting base64 conversion")
+        if s:debug_mode
+            call s:DebugLog("Starting base64 conversion")
+        endif
 
-        " Use base64 command with proper options to ensure clean output
-        let l:cmd = 'base64 -w 0 -i ' . shellescape(a:filepath) . ' | tr -d "\n"'
-        call s:DebugLog("Running command: " . l:cmd)
+        " Optimized base64 command without pipe
+        let l:cmd = 'base64 -w 0 ' . shellescape(a:filepath)
+        if s:debug_mode
+            call s:DebugLog("Running command: " . l:cmd)
+        endif
 
         let l:output = system(l:cmd)
         let l:status = v:shell_error
 
-        call s:DebugLog("base64 conversion complete, status: " . l:status)
-        call s:DebugLog("base64 output length: " . len(l:output))
+        if s:debug_mode
+            call s:DebugLog("base64 conversion complete, status: " . l:status)
+            call s:DebugLog("base64 output length: " . len(l:output))
+        endif
 
         if l:status
-            call s:DebugLog("Error: base64 conversion failed")
+            if s:debug_mode
+                call s:DebugLog("Error: base64 conversion failed")
+            endif
             throw "Failed to convert file: " . a:filepath
         endif
 
@@ -499,32 +518,23 @@ endfunction
 
 " Core Plugin Functions
 function! GetApiKey(name) abort
-    return eval('$' . g:claudia_config.api_key_name)
+    return eval('$' . a:name)
 endfunction
 
 function! AnimateThinking(timer) abort
-    " Don't animate if response has started
-    if s:response_started
-        call StopThinkingAnimation()
-        return
-    endif
-
-    if s:active_job == v:null
+    " Early exit if response started or job finished
+    if s:response_started || s:active_job == v:null
         call StopThinkingAnimation()
         return
     endif
 
     " Update dots animation
     let s:dots_state = (s:dots_state + 1) % 4
-    let l:dots = repeat('.', s:dots_state)
 
-    " Get current line
+    " Update line with new thinking animation
     let l:current_line = getline('.')
-    " Remove previous thinking text if it exists
     let l:cleaned_line = substitute(l:current_line, s:current_thinking_word . '\.*$', '', '')
-    " Add new thinking text
-    let l:new_line = l:cleaned_line . s:current_thinking_word . l:dots
-    call setline('.', l:new_line)
+    call setline('.', l:cleaned_line . s:current_thinking_word . repeat('.', s:dots_state))
     redraw
 endfunction
 
@@ -535,7 +545,7 @@ function! StartThinkingAnimation() abort
     let s:current_thinking_word = s:thinking_states[l:rand_index]
 
     " Start timer for animation
-    let s:thinking_timer = timer_start(300, 'AnimateThinking', {'repeat': -1})
+    let s:thinking_timer = timer_start(400, 'AnimateThinking', {'repeat': -1})
 endfunction
 
 function! StopThinkingAnimation() abort
@@ -577,64 +587,68 @@ function! GetVisualSelection() abort
 endfunction
 
 function! WriteStringAtCursor(str) abort
-    " If this is the first write, clean up thinking animation and prepare new line
+    " Initialize if this is the first write
     if !s:response_started
-        let s:response_started = 1  " Mark that response has started
+        let s:response_started = 1
         call StopThinkingAnimation()
 
-        " Store original cursor position if not already stored
         if empty(s:original_cursor_pos)
             let s:original_cursor_pos = getpos('.')
         endif
 
-        " Move to next line to start the actual response
         call append('.', '')
         normal! j
     endif
 
-    " First normalize all line endings
-    let l:normalized = substitute(a:str, '\r\n\|\r\|\n', '\n', 'g')
+    " Quick exit for empty strings
+    if empty(a:str)
+        return
+    endif
 
+    " Always normalize line endings
+    let l:normalized = substitute(a:str, '\r\n\|\r', '\n', 'g')
     " Replace invisible space characters with regular spaces
     let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
 
-    " Split into lines, preserving empty lines
+    " Split into lines
     let l:lines = split(l:normalized, '\n', 1)
 
-    " Get current position relative to original cursor position
+    " Get current position and add content
     let l:current_pos = getpos('.')
-    let l:line_offset = l:current_pos[1] - s:original_cursor_pos[1]
-
-    " Handle first line
     let l:current_line = getline('.')
-    call setline('.', l:current_line . l:lines[0])
 
-    " Add remaining lines
-    if len(l:lines) > 1
+    " Special case for single line without newlines (common case)
+    if len(l:lines) == 1
+        call setline('.', l:current_line . l:lines[0])
+        call cursor(l:current_pos[1], len(getline('.')))
+    else
+        " Multi-line case
+        call setline('.', l:current_line . l:lines[0])
         call append('.', l:lines[1:])
+
+        " Update cursor position
+        let l:line_offset = l:current_pos[1] - s:original_cursor_pos[1]
+        let l:new_line = s:original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
+        call cursor(l:new_line, len(getline(l:new_line)))
     endif
 
-    " Calculate new cursor position
-    let l:new_line = s:original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
-    let l:new_col = len(getline(l:new_line))
-    call cursor(l:new_line, l:new_col)
-
-    " Force redraw
     redraw
 endfunction
 
 function! MakeAnthropicCurlArgs(prompt) abort
-    call s:DebugLog("Preparing API request")
-    call s:DebugLog("Number of context entries: " . len(s:context_entries))
+    if s:debug_mode
+        call s:DebugLog("Preparing API request with " . len(s:context_entries) . " context entries")
+    endif
 
     " Validate API key
     let l:api_key = eval('$' . g:claudia_config.api_key_name)
     if empty(l:api_key)
-        call s:DebugLog("Error: API key not found in environment")
+        if s:debug_mode
+            call s:DebugLog("Error: API key not found in environment")
+        endif
         echoerr "API key not found in environment variable " . g:claudia_config.api_key_name
         return []
     endif
-    call s:DebugLog("API key found (length: " . len(l:api_key) . ")")
 
     " Prepare content blocks
     let l:content_blocks = []
@@ -642,38 +656,19 @@ function! MakeAnthropicCurlArgs(prompt) abort
     " Process context entries first
     for entry in s:context_entries
         try
-            call s:DebugLog("Processing context entry: " . entry.filepath)
-            call s:DebugLog("Entry type: " . entry.type)
-            let l:content = ''
-
-            " Check if content is cached
-            if has_key(s:context_cache, entry.id)
-                call s:DebugLog("Using cached content for ID " . entry.id)
-                let l:content = s:context_cache[entry.id]
-            else
-                call s:DebugLog("Loading content for ID " . entry.id)
-                let l:content = s:LoadFileWithProgress(entry.expanded_path, entry.type)
-            endif
-
-            call s:DebugLog("Content loaded, length: " . len(l:content))
+            let l:content = has_key(s:context_cache, entry.id)
+                        \ ? s:context_cache[entry.id]
+                        \ : s:LoadFileWithProgress(entry.expanded_path, entry.type)
 
             if entry.type ==# 'text'
                 if !empty(l:content)
-                    call s:DebugLog("Adding text content block")
-                    let l:block = {
-                                \   'type': 'text',
-                                \   'text': l:content
-                                \ }
-
-                    " Add cache control if content is cached
+                    let l:block = {'type': 'text', 'text': l:content}
                     if has_key(s:context_cache, entry.id)
                         let l:block.cache_control = {'type': 'ephemeral'}
                     endif
-
                     call add(l:content_blocks, l:block)
                 endif
             elseif entry.type ==# 'media'
-                call s:DebugLog("Adding media content block: " . entry.media_type)
                 let l:block = {
                             \ 'type': entry.media_type =~# '^image/' ? 'image' : 'document',
                             \ 'source': {
@@ -683,40 +678,28 @@ function! MakeAnthropicCurlArgs(prompt) abort
                             \   }
                             \ }
 
-                " Add cache control if content is cached
                 if has_key(s:context_cache, entry.id)
                     let l:block.cache_control = {'type': 'ephemeral'}
                 endif
-
                 call add(l:content_blocks, l:block)
             endif
-
-            call s:DebugLog("Context block added successfully")
         catch
             let l:error_msg = "Failed to process context " . entry.filepath . ": " . v:exception
-            call s:DebugLog("Error: " . l:error_msg)
+            if s:debug_mode
+                call s:DebugLog("Error: " . l:error_msg)
+            endif
             echoerr l:error_msg
             return []
         endtry
     endfor
 
-    call s:DebugLog("Context blocks processed: " . len(l:content_blocks))
-
     " Add user prompt last
-    call add(l:content_blocks, {
-                \ 'type': 'text',
-                \ 'text': a:prompt
-                \ })
+    call add(l:content_blocks, {'type': 'text', 'text': a:prompt})
 
-    call s:DebugLog("Total content blocks (including prompt): " . len(l:content_blocks))
-
-    " Get the wrap column
+    " Get the wrap column and build instruction text
     let l:wrap_col = s:GetWrapColumn()
     let l:instruction_text = 'Maintain a strict line length of less than ' . (l:wrap_col + 1) . ' (thinking and text, both).'
-    let l:repeated_instruction = ''
-    for i in range(5)
-        let l:repeated_instruction .= l:instruction_text . ' '
-    endfor
+    let l:repeated_instruction = repeat(l:instruction_text . ' ', 5)
 
     " Build request data
     let l:data = {
@@ -747,9 +730,10 @@ function! MakeAnthropicCurlArgs(prompt) abort
                     \ }
     endif
 
-    " Log sanitized request data with preserved structure
-    let l:debug_data = s:SanitizeForDebug(l:data)
-    call s:DebugLog("Request data structure: " . string(l:debug_data))
+    if s:debug_mode
+        let l:debug_data = s:SanitizeForDebug(l:data)
+        call s:DebugLog("Request data structure: " . string(l:debug_data))
+    endif
 
     " Build curl arguments with explicit header handling
     let l:headers = [
@@ -763,61 +747,64 @@ function! MakeAnthropicCurlArgs(prompt) abort
         call add(l:headers, 'anthropic-beta: output-128k-2025-02-19')
     endif
 
+    " Build arg list efficiently
     let l:args = ['-N', '-X', 'POST']
 
     if s:debug_mode
-        call add(l:args, '-v')
+        call extend(l:args, ['-v', '--stderr'])
         let l:error_log = tempname()
-        call add(l:args, '--stderr')
         call add(l:args, l:error_log)
         let s:curl_error_log = l:error_log
     endif
 
+    " Add headers efficiently
     for header in l:headers
-        call add(l:args, '-H')
-        call add(l:args, header)
+        call extend(l:args, ['-H', header])
     endfor
 
+    " Add data and URL
     let l:json_data = json_encode(l:data)
-    call add(l:args, '-d')
-    call add(l:args, l:json_data)
-    call add(l:args, g:claudia_config.url)
+    call extend(l:args, ['-d', l:json_data, g:claudia_config.url])
 
     return l:args
 endfunction
 
 function! JobOutCallback(channel, msg)
-    call s:DebugLog("Response chunk received:")
-    call s:DebugLog("Chunk length: " . len(a:msg))
-    call s:DebugLog("First 100 chars: " . strpart(a:msg, 0, 100))
-
+    if s:debug_mode
+        call s:DebugLog("Response chunk received, length: " . len(a:msg))
+    endif
     call HandleAnthropicData(a:msg)
 endfunction
 
 function! JobErrCallback(channel, msg)
-    call s:DebugLog("Error from job: " . a:msg)
+    if s:debug_mode
+        call s:DebugLog("Error from job: " . a:msg)
+    endif
 endfunction
 
 function! JobExitCallback(job, status)
-    call s:DebugLog("Job exited with status: " . a:status)
+    if s:debug_mode
+        call s:DebugLog("Job exited with status: " . a:status)
 
-    " Check curl error log if available
-    if s:debug_mode && exists('s:curl_error_log') && filereadable(s:curl_error_log)
-        let l:errors = readfile(s:curl_error_log)
-        if !empty(l:errors)
-            call s:DebugLog("Curl debug output:")
-            for l:line in l:errors
-                call s:DebugLog("Curl: " . l:line)
-            endfor
+        " Process curl error log if available
+        if exists('s:curl_error_log') && filereadable(s:curl_error_log)
+            let l:errors = readfile(s:curl_error_log)
+            if !empty(l:errors)
+                call s:DebugLog("Curl debug output:")
+                for l:line in l:errors
+                    call s:DebugLog("Curl: " . l:line)
+                endfor
+            endif
+            call delete(s:curl_error_log)
+            unlet s:curl_error_log
         endif
-        " Clean up temp file
-        call delete(s:curl_error_log)
-        unlet s:curl_error_log
     endif
 
-    " Clean up temporary data file if it exists
+    " Clean up temporary data file
     if exists('s:temp_data_file') && filereadable(s:temp_data_file)
-        call s:DebugLog("Cleaning up temp file: " . s:temp_data_file)
+        if s:debug_mode
+            call s:DebugLog("Cleaning up temp file: " . s:temp_data_file)
+        endif
         call delete(s:temp_data_file)
         unlet s:temp_data_file
     endif
@@ -848,7 +835,9 @@ function! CancelJob()
 
         " Clean up temporary data file if it exists
         if exists('s:temp_data_file') && filereadable(s:temp_data_file)
-            call s:DebugLog("Cleaning up temp file on cancel: " . s:temp_data_file)
+            if s:debug_mode
+                call s:DebugLog("Cleaning up temp file on cancel: " . s:temp_data_file)
+            endif
             call delete(s:temp_data_file)
             unlet s:temp_data_file
         endif
@@ -863,7 +852,9 @@ endfunction
 function! s:HandleAPIError(error) abort
     " Extract error information
     if type(a:error) != v:t_dict || !has_key(a:error, 'error')
-        call s:DebugLog("Invalid error format")
+        if s:debug_mode
+            call s:DebugLog("Invalid error format")
+        endif
         return
     endif
 
@@ -872,10 +863,12 @@ function! s:HandleAPIError(error) abort
     let l:message = get(l:error, 'message', 'Unknown error occurred')
     let l:details = get(l:error, 'details', v:null)
 
-    call s:DebugLog("Handling API error: " . l:type)
-    call s:DebugLog("Error message: " . l:message)
-    if l:details != v:null
-        call s:DebugLog("Error details: " . string(l:details))
+    if s:debug_mode
+        call s:DebugLog("Handling API error: " . l:type)
+        call s:DebugLog("Error message: " . l:message)
+        if l:details != v:null
+            call s:DebugLog("Error details: " . string(l:details))
+        endif
     endif
 
     " Clean up any thinking animation
@@ -921,45 +914,62 @@ function! s:HandleAPIError(error) abort
 endfunction
 
 function! HandleAnthropicData(data) abort
-    call s:DebugLog("Handling response data of length: " . len(a:data))
-    call s:DebugLog("Raw response: " . a:data)
-
-    " Variables to track thinking block state
+    " Initialize thinking block state and event buffer if not yet defined
     if !exists('s:in_thinking_block')
         let s:in_thinking_block = 0
         let s:thinking_content = ''
     endif
+    if !exists('s:event_buffer')
+        let s:event_buffer = ''
+    endif
 
-    " Split the input into individual events
-    let l:events = split(a:data, "event: ")
-    call s:DebugLog("Number of events: " . len(l:events))
+    " Append new data to the buffer
+    let s:event_buffer .= a:data
 
-    for l:event in l:events
-        if empty(l:event)
-            call s:DebugLog("Skipping empty event")
+    " Find complete events (ending with double newline)
+    let l:complete_events = []
+    let l:start_pos = 0
+    let l:end_pos = -1
+
+    " Find positions of all double newlines
+    while 1
+        let l:end_pos = match(s:event_buffer, "\n\n", l:start_pos)
+        if l:end_pos == -1
+            break
+        endif
+
+        " Extract complete event
+        call add(l:complete_events, strpart(s:event_buffer, l:start_pos, l:end_pos - l:start_pos + 2))
+        let l:start_pos = l:end_pos + 2
+    endwhile
+
+    " Update buffer to contain only incomplete event data
+    if l:start_pos > 0
+        let s:event_buffer = strpart(s:event_buffer, l:start_pos)
+    endif
+
+    " Process complete events
+    for l:raw_event in l:complete_events
+        " Parse event lines
+        let l:event_type = ''
+        let l:data_content = ''
+        let l:lines = split(l:raw_event, "\n")
+
+        for l:line in l:lines
+            if l:line =~# '^event: '
+                let l:event_type = l:line[7:]
+            elseif l:line =~# '^data: '
+                let l:data_content = l:line[6:]
+            endif
+        endfor
+
+        " Skip if we didn't find valid event data
+        if empty(l:event_type) || empty(l:data_content)
             continue
         endif
-
-        " Split event into type and data
-        let l:parts = split(l:event, "\n")
-        if len(l:parts) < 2
-            call s:DebugLog("Invalid event format - parts: " . string(l:parts))
-            continue
-        endif
-
-        let l:event_type = l:parts[0]
-        let l:data = l:parts[1]
-        call s:DebugLog("Event type: " . l:event_type)
-
-        " Remove 'data: ' prefix if present
-        if l:data =~# '^data: '
-            let l:data = l:data[6:]
-        endif
-        call s:DebugLog("Event data: " . l:data)
 
         try
-            let l:json = json_decode(l:data)
-            call s:DebugLog("Parsed JSON: " . string(l:json))
+            let l:json = json_decode(l:data_content)
 
             " Check for error events
             if l:event_type ==# 'error' || (type(l:json) == v:t_dict && has_key(l:json, 'type') && l:json.type ==# 'error')
@@ -971,7 +981,6 @@ function! HandleAnthropicData(data) abort
             if l:event_type ==# 'content_block_start' && has_key(l:json, 'content_block')
                 let l:block = l:json.content_block
                 if has_key(l:block, 'type') && l:block.type ==# 'thinking'
-                    call s:DebugLog("Starting thinking block")
                     let s:in_thinking_block = 1
                     let s:thinking_content = ''
                     call WriteStringAtCursor("<thinking>\n")
@@ -979,39 +988,27 @@ function! HandleAnthropicData(data) abort
             endif
 
             " Handle various delta event types
-            if l:event_type ==# 'content_block_delta'
-                if has_key(l:json, 'delta')
-                    let l:delta = l:json.delta
-                    let l:delta_type = get(l:delta, 'type', '')
+            if l:event_type ==# 'content_block_delta' && has_key(l:json, 'delta')
+                let l:delta = l:json.delta
+                let l:delta_type = get(l:delta, 'type', '')
 
-                    if l:delta_type ==# 'text_delta' && has_key(l:delta, 'text')
-                        call s:DebugLog("Writing text delta: " . l:delta.text)
-                        call WriteStringAtCursor(l:delta.text)
-                    elseif l:delta_type ==# 'thinking_delta' && has_key(l:delta, 'thinking')
-                        call s:DebugLog("Writing thinking delta: " . l:delta.thinking)
-                        let s:thinking_content .= l:delta.thinking
-                        call WriteStringAtCursor(l:delta.thinking)
-                    elseif l:delta_type ==# 'signature_delta'
-                        call s:DebugLog("Received signature delta")
-                    else
-                        call s:DebugLog("Unknown delta type: " . l:delta_type)
-                    endif
-                else
-                    call s:DebugLog("No delta in JSON: " . string(keys(l:json)))
+                if l:delta_type ==# 'text_delta' && has_key(l:delta, 'text')
+                    call WriteStringAtCursor(l:delta.text)
+                elseif l:delta_type ==# 'thinking_delta' && has_key(l:delta, 'thinking')
+                    let s:thinking_content .= l:delta.thinking
+                    call WriteStringAtCursor(l:delta.thinking)
                 endif
             endif
 
-            " Track thinking block end and handle transition to regular content
+            " Track thinking block end
             if l:event_type ==# 'content_block_stop' && s:in_thinking_block
-                call s:DebugLog("Ending thinking block")
-                call WriteStringAtCursor("\n</thinking>\n")
+                call WriteStringAtCursor("\n</thinking>\n\n")
                 let s:in_thinking_block = 0
-
-                " Add line break and empty line after thinking block
-                call WriteStringAtCursor("\n")
             endif
         catch
-            call s:DebugLog("JSON parse error: " . v:exception)
+            if s:debug_mode
+                call s:DebugLog("JSON parse error: " . v:exception)
+            endif
             continue
         endtry
     endfor
@@ -1021,6 +1018,7 @@ function! s:TriggerClaudia() abort
     call ResetGlobalState()
     let s:original_cursor_pos = getpos('.')
 
+    " Get prompt from visual selection or cursor position
     if s:from_visual_mode
         let l:prompt = GetVisualSelection()
         let l:end_line = line("'>")
@@ -1036,13 +1034,20 @@ function! s:TriggerClaudia() abort
 
     call StartThinkingAnimation()
 
+    " Get curl arguments
     let l:args = MakeAnthropicCurlArgs(l:prompt)
+    if empty(l:args)
+        call StopThinkingAnimation()
+        return
+    endif
 
     " Create a temporary file for the JSON data
     let l:temp_file = tempname()
-    call s:DebugLog("Created temp file: " . l:temp_file)
+    if s:debug_mode
+        call s:DebugLog("Created temp file: " . l:temp_file)
+    endif
 
-    " Find the JSON data in the arguments
+    " Extract JSON data efficiently
     let l:json_data = ''
     let l:filtered_args = []
     let i = 0
@@ -1058,20 +1063,16 @@ function! s:TriggerClaudia() abort
 
     " Write JSON data to temp file
     call writefile([l:json_data], l:temp_file)
-
-    " Store temp file path for cleanup
     let s:temp_data_file = l:temp_file
 
-    " Build curl command with data file reference
+    " Build curl command efficiently
     let l:curl_cmd = 'curl -N -s --no-buffer'
-    for l:arg in l:filtered_args
-        let l:curl_cmd .= ' ' . shellescape(l:arg)
-    endfor
+    let l:arg_string = join(map(l:filtered_args, 'shellescape(v:val)'), ' ')
+    let l:curl_cmd .= ' ' . l:arg_string . ' -d @' . shellescape(l:temp_file)
 
-    " Add data file argument (note: -d @file syntax for reading from file)
-    let l:curl_cmd .= ' -d @' . shellescape(l:temp_file)
-
-    call s:DebugLog("Using curl command: " . l:curl_cmd)
+    if s:debug_mode
+        call s:DebugLog("Using curl command: " . l:curl_cmd)
+    endif
 
     " Execute curl in background
     let s:active_job = job_start(['/bin/sh', '-c', l:curl_cmd], {
