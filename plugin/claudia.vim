@@ -281,9 +281,7 @@ function! s:show_config() abort
 
   let l:reasoning_labels = ['Disabled', 'Medium (16K budget)', 'Heavy (32K budget)']
   if s:config.reasoning_level >= 0 && s:config.reasoning_level <= 2
-    echo printf("%-15s %s (Level %d)", "Reasoning:",
-          \ l:reasoning_labels[s:config.reasoning_level],
-          \ s:config.reasoning_level)
+    echo printf("%-15s %s (Level %d)", "Reasoning:", l:reasoning_labels[s:config.reasoning_level], s:config.reasoning_level)
   else
     echo printf("%-15s %s", "Reasoning:", "Disabled")
   endif
@@ -319,8 +317,7 @@ function! s:set_system_prompt(input) abort
       let s:config.effective.system_prompt = l:content
       let g:claudia_config.system_prompt = l:content
       call s:debug_log("Loaded system prompt from " . l:filepath)
-      echo "System prompt loaded from " . l:filepath .
-            \ " (" . len(l:content) . " chars)"
+      echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
     catch
       call s:debug_log("Error loading system prompt: " . v:exception)
       echoerr "Failed to read " . l:filepath . ": " . v:exception
@@ -428,8 +425,7 @@ function! s:add_context(filepath) abort
   let s:context.next_id += 1
 
   let l:type_str = l:type ==# 'media' ? ' as ' . l:media_type : ''
-  echo "Added context from " . a:filepath . l:type_str .
-        \ " with ID " . (s:context.next_id - 1)
+  echo "Added context from " . a:filepath . l:type_str . " with ID " . (s:context.next_id - 1)
 endfunction
 
 " Show all context entries
@@ -443,8 +439,7 @@ function! s:show_context() abort
   for entry in s:context.entries
     let l:type_str = entry.type ==# 'media' ? ' [' . entry.media_type . ']' : ''
     let l:cache_str = has_key(s:context.cache, entry.id) ? ' (cached)' : ''
-    echo printf("ID: %d, File: %s%s%s",
-          \ entry.id, entry.filepath, l:type_str, l:cache_str)
+    echo printf("ID: %d, File: %s%s%s", entry.id, entry.filepath, l:type_str, l:cache_str)
   endfor
 endfunction
 
@@ -619,10 +614,8 @@ function! s:animate_thinking(timer) abort
 
   " Update line with new thinking animation
   let l:current_line = getline('.')
-  let l:cleaned_line = substitute(l:current_line,
-        \ s:state.current_thinking_word . '\.*$', '', '')
-  call setline('.', l:cleaned_line . s:state.current_thinking_word .
-        \ repeat('.', s:state.dots_state))
+  let l:cleaned_line = substitute(l:current_line, s:state.current_thinking_word . '\.*$', '', '')
+  call setline('.', l:cleaned_line . s:state.current_thinking_word . repeat('.', s:state.dots_state))
   redraw
 endfunction
 
@@ -633,8 +626,7 @@ function! s:stop_thinking_animation() abort
     let s:state.thinking_timer = v:null
     " Clean up thinking text
     let l:current_line = getline('.')
-    let l:cleaned_line = substitute(l:current_line,
-          \ s:state.current_thinking_word . '\.*$', '', '')
+    let l:cleaned_line = substitute(l:current_line, s:state.current_thinking_word . '\.*$', '', '')
     call setline('.', l:cleaned_line)
   endif
 endfunction
@@ -691,8 +683,7 @@ function! s:write_string_at_cursor(str) abort
   " Always normalize line endings
   let l:normalized = substitute(a:str, '\r\n\|\r', '\n', 'g')
   " Replace invisible space characters with regular spaces
-  let l:normalized = substitute(l:normalized,
-        \ '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
+  let l:normalized = substitute(l:normalized, '\%u00A0\|\%u2000-\%u200A\|\%u202F\|\%u205F\|\%u3000', ' ', 'g')
 
   " Split into lines
   let l:lines = split(l:normalized, '\n', 1)
@@ -712,8 +703,7 @@ function! s:write_string_at_cursor(str) abort
 
     " Update cursor position
     let l:line_offset = l:current_pos[1] - s:state.original_cursor_pos[1]
-    let l:new_line = s:state.original_cursor_pos[1] + l:line_offset +
-          \ len(l:lines) - 1
+    let l:new_line = s:state.original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
     call cursor(l:new_line, len(getline(l:new_line)))
   endif
 
@@ -729,8 +719,7 @@ function! s:make_anthropic_curl_args(prompt) abort
   let l:api_key = s:get_api_key(s:config.effective.api_key_name)
   if empty(l:api_key)
     call s:debug_log("Error: API key not found in environment")
-    echoerr "API key not found in environment variable " .
-          \ s:config.effective.api_key_name
+    echoerr "API key not found in environment variable " . s:config.effective.api_key_name
     return []
   endif
 
@@ -861,8 +850,7 @@ function! s:handle_anthropic_data(data) abort
     endif
 
     " Extract complete event
-    call add(l:complete_events, strpart(s:state.event_buffer,
-          \ l:start_pos, l:end_pos - l:start_pos + 2))
+    call add(l:complete_events, strpart(s:state.event_buffer, l:start_pos, l:end_pos - l:start_pos + 2))
     let l:start_pos = l:end_pos + 2
   endwhile
 
@@ -895,8 +883,7 @@ function! s:handle_anthropic_data(data) abort
       let l:json = json_decode(l:data_content)
 
       " Check for error events
-      if l:event_type ==# 'error' || (type(l:json) == v:t_dict &&
-            \ has_key(l:json, 'type') && l:json.type ==# 'error')
+      if l:event_type ==# 'error' || (type(l:json) == v:t_dict && has_key(l:json, 'type') && l:json.type ==# 'error')
         call s:handle_api_error(l:json)
         return
       endif
@@ -947,13 +934,9 @@ function! s:handle_api_error(error) abort
   let l:error = a:error.error
   let l:type = get(l:error, 'type', 'unknown_error')
   let l:message = get(l:error, 'message', 'Unknown error occurred')
-  let l:details = get(l:error, 'details', v:null)
 
   call s:debug_log("Handling API error: " . l:type)
   call s:debug_log("Error message: " . l:message)
-  if l:details != v:null
-    call s:debug_log("Error details: " . string(l:details))
-  endif
 
   " Clean up any thinking animation
   call s:stop_thinking_animation()
@@ -961,37 +944,7 @@ function! s:handle_api_error(error) abort
   " Force redraw to ensure buffer is clean
   redraw!
 
-  " Handle specific error types
-  if l:type ==# 'overloaded_error'
-    echohl ErrorMsg
-    echo "Anthropic API is currently unavailable (overloaded). Please try again later."
-    echohl None
-  elseif l:type ==# 'invalid_request_error'
-    echohl ErrorMsg
-    echo "Invalid request: " . l:message
-    echohl None
-  elseif l:type ==# 'authentication_error'
-    echohl ErrorMsg
-    echo "Authentication failed. Please check your API key."
-    echohl None
-  elseif l:type ==# 'permission_error'
-    echohl ErrorMsg
-    echo "Permission denied: " . l:message
-    echohl None
-  elseif l:type ==# 'not_found_error'
-    echohl ErrorMsg
-    echo "Resource not found: " . l:message
-    echohl None
-  elseif l:type ==# 'rate_limit_error'
-    echohl ErrorMsg
-    echo "Rate limit exceeded. Please wait before making more requests."
-    echohl None
-  else
-    " Generic error handling
-    echohl ErrorMsg
-    echo "API Error (" . l:type . "): " . l:message
-    echohl None
-  endif
+  echoerr l:type . ": " . l:message
 
   " Cancel the current job and reset state
   call s:cancel_job()
