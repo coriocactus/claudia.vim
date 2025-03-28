@@ -23,7 +23,7 @@ This project is a vim rewrite of the following projects:
 ### Step 1 Option 1: vim-plug (or your preferred plugin manager)
 
 ```vim
-Plug 'cordcivilian/claudia.vim'
+Plug 'joshwongcc/claudia.vim'
 ```
 
 ### Step 1 Option 2: Manual Installation
@@ -31,7 +31,7 @@ Plug 'cordcivilian/claudia.vim'
 ```bash
 mkdir -p ~/.vim/pack/plugins/start
 cd ~/.vim/pack/plugins/start
-git clone https://github.com/cordcivilian/claudia.vim.git
+git clone https://github.com/joshwongcc/claudia.vim.git
 ```
 
 ### Step 2: API Key Setup
