@@ -712,8 +712,7 @@ endfunction
 
 " Prepare API request arguments
 function! s:make_anthropic_curl_args(prompt) abort
-  call s:debug_log("Preparing API request with " .
-        \ len(s:context.entries) . " context entries")
+  call s:debug_log("Preparing API request with " . len(s:context.entries) . " context entries")
 
   " Validate API key
   let l:api_key = s:get_api_key(s:config.effective.api_key_name)
@@ -763,7 +762,7 @@ function! s:make_anthropic_curl_args(prompt) abort
 
   " Get the wrap column and build instruction text
   let l:wrap_col = s:get_wrap_column()
-  let l:instruction_text = 'Maintain a strict line length of less than ' .  (l:wrap_col + 1) . '.'
+  let l:instruction_text = 'Maintain a strict line length of less than ' . (l:wrap_col + 1) . '.'
   let l:repeated_instruction = repeat(l:instruction_text . ' ', 5)
 
   " Build request data
