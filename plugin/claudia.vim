@@ -691,6 +691,13 @@ function! s:animate_footer(timer) abort
   call setpos('.', l:save_pos)
 endfunction
 
+function! s:center_line(line_number)
+  let current_pos = getpos('.')
+  call cursor(a:line_number, 1)
+  normal! zz
+  call setpos('.', current_pos)
+endfunction
+
 " Get all lines up to the cursor
 function! s:get_lines_until_cursor() abort
   let l:current_line = line('.')
@@ -799,6 +806,7 @@ function! s:write_string_at_cursor(str) abort
     call cursor(l:new_line, len(getline(l:new_line)))
   endif
 
+  call s:center_line(s:state.footer_line_nr)
   redraw
 endfunction
 
@@ -1100,7 +1108,6 @@ function! s:job_exit_callback(job, status)
 
   " Move cursor to position 1 of line below footer
   call cursor(s:state.footer_line_nr, 1)
-  call append('.', '')
   normal! j0
 
   let s:state.active_job = v:null
