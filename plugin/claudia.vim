@@ -666,10 +666,8 @@ function! s:animate_footer(timer) abort
   " Update dots animation
   let s:state.dots_state = (s:state.dots_state + 1) % 4
 
-  " Periodically change emoticon
-  if s:state.dots_state == 0
-    let s:state.emoticon_index = (s:state.emoticon_index + 1) % len(s:ui.active_emoticons)
-  endif
+  " Change loading emoticon
+  let s:state.emoticon_index = rand() % len(s:ui.active_emoticons)
 
   " Update footer with new emoticon and loading tag
   let l:emoticon = s:ui.active_emoticons[s:state.emoticon_index]
