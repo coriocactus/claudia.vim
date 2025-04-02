@@ -34,7 +34,9 @@ let s:state = {
       \ 'temp_data_file': '',
       \ 'from_visual_mode': 0,
       \ 'in_thinking_block': 0,
-      \ 'thinking_content': ''
+      \ 'thinking_content': '',
+      \ 'emoticon_index': 0,
+      \ 'footer_added': 0
       \ }
 
 " Context namespace - manages file contexts
@@ -60,6 +62,16 @@ let s:thinking_states = [
       \ 'Unintentionally doing what they cannot do intentionally',
       \ 'Regurgitating training data (basically what 90% of them get paid to do)',
       \ ]
+
+" UI decoration constants
+let s:ui = {
+      \ 'header': '<CLAUDIA INIT> |===|===|===|===|===|===|===|===|===|===|===|===|===|===|===|===',
+      \ 'footer_base': '===|===|===|===|===|===|===|===|===|===|===|===|===|===|',
+      \ 'term_tag': '<CLAUDIA TERM>',
+      \ 'loading_tags': ['<CLAUDIA .   >', '<CLAUDIA ..  >', '<CLAUDIA ... >', '<CLAUDIA ....>'],
+      \ 'active_emoticons': ['(❀◕‿◕)ง ', '(❀◕‿◕)ᕗ ', '(❀◕‿◕)۶ ', '(❀◕‿◕)ﾉ ', '(❀◕‿◕)╯ ', '(❀◕‿◕)ノ', '(❀◕‿◕)⸝⸝', '(❀◕‿◕)づ', '(❀◕‿◕)っ', '(❀◕‿◕)੭ ', '(❀◕‿◕)و '],
+      \ 'final_emoticons': ['(❀◠‿◠)❤ ', '(❀◠‿◠)♡ ', '(❀◠‿◠)★ ', '(❀◠‿◠)☆ ']
+      \ }
 
 "-----------------------------------------------------------------------------
 " Initialization Functions
@@ -124,6 +136,8 @@ function! s:reset_state() abort
   let s:state.event_buffer = ''
   let s:state.in_thinking_block = 0
   let s:state.thinking_content = ''
+  let s:state.emoticon_index = 0
+  let s:state.footer_added = 0
 
   " Clean up temporary data file if it exists
   if !empty(s:state.temp_data_file) && filereadable(s:state.temp_data_file)
@@ -597,6 +611,14 @@ function! s:start_thinking_animation() abort
   let l:rand_index = rand() % len(s:thinking_states)
   let s:state.current_thinking_word = s:thinking_states[l:rand_index]
 
+  " Add the header for the claudia response
+  call append('.', s:ui.header)
+  normal! j
+  call append('.', '')
+  normal! j
+  call append('.', '')
+  normal! j
+
   " Start timer for animation
   let s:state.thinking_timer = timer_start(400, 's:animate_thinking', {'repeat': -1})
 endfunction
@@ -629,6 +651,38 @@ function! s:stop_thinking_animation() abort
     let l:cleaned_line = substitute(l:current_line, s:state.current_thinking_word . '\.*$', '', '')
     call setline('.', l:cleaned_line)
   endif
+endfunction
+
+function! s:animate_footer(timer) abort
+  " Early exit if job finished
+  if s:state.active_job == v:null
+    call timer_stop(s:state.thinking_timer)
+    let s:state.thinking_timer = v:null
+    return
+  endif
+
+  " Update dots animation
+  let s:state.dots_state = (s:state.dots_state + 1) % 4
+
+  " Periodically change emoticon
+  if s:state.dots_state == 0
+    let s:state.emoticon_index = (s:state.emoticon_index + 1) % len(s:ui.active_emoticons)
+  endif
+
+  " Find the footer line (last line of the buffer)
+  let l:last_line = line('$')
+
+  " Update footer with new emoticon and loading tag
+  let l:emoticon = s:ui.active_emoticons[s:state.emoticon_index]
+  let l:loading_tag = s:ui.loading_tags[s:state.dots_state]
+  call setline(l:last_line, l:emoticon . s:ui.footer_base . ' ' . l:loading_tag)
+
+  " Save cursor position
+  let l:save_pos = getpos('.')
+
+  " Redraw and restore cursor
+  redraw
+  call setpos('.', l:save_pos)
 endfunction
 
 " Get all lines up to the cursor
@@ -670,9 +724,6 @@ function! s:write_string_at_cursor(str) abort
     if empty(s:state.original_cursor_pos)
       let s:state.original_cursor_pos = getpos('.')
     endif
-
-    call append('.', '')
-    normal! j
   endif
 
   " Quick exit for empty strings
@@ -704,6 +755,28 @@ function! s:write_string_at_cursor(str) abort
     " Update cursor position
     let l:line_offset = l:current_pos[1] - s:state.original_cursor_pos[1]
     let l:new_line = s:state.original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
+    call cursor(l:new_line, len(getline(l:new_line)))
+  endif
+
+  " Add footer if not already added and response has started
+  if s:state.response_started && !s:state.footer_added
+    let s:state.footer_added = 1
+    call append('.', '')
+    call append('.', '')
+
+    " Random emoticon
+    let l:emoticon = s:ui.active_emoticons[s:state.emoticon_index]
+    let l:loading_tag = s:ui.loading_tags[s:state.dots_state]
+
+    " Add footer line
+    call append('.', l:emoticon . s:ui.footer_base . ' ' . l:loading_tag)
+
+    " Start footer animation timer
+    if s:state.thinking_timer == v:null
+      let s:state.thinking_timer = timer_start(400, 's:animate_footer', {'repeat': -1})
+    endif
+
+    " Move cursor back to content position
     call cursor(l:new_line, len(getline(l:new_line)))
   endif
 
@@ -993,6 +1066,20 @@ function! s:job_exit_callback(job, status)
   %s/\s\+$//ge
   call winrestview(l:save)
 
+  " Stop any thinking timer
+  if s:state.thinking_timer != v:null
+    call timer_stop(s:state.thinking_timer)
+    let s:state.thinking_timer = v:null
+  endif
+
+  " Update footer with completion status
+  if s:state.footer_added
+    let l:last_line = line('$')
+    let l:rand_index = rand() % len(s:ui.final_emoticons)
+    let l:final_emoticon = s:ui.final_emoticons[l:rand_index]
+    call setline(l:last_line, l:final_emoticon . s:ui.footer_base . ' ' . s:ui.term_tag)
+  endif
+
   " Move cursor to position 1 of line below response
   call append('.', '')
   normal! j0
@@ -1018,6 +1105,14 @@ function! s:cancel_job()
       call s:debug_log("Cleaning up temp file on cancel: " . s:state.temp_data_file)
       call delete(s:state.temp_data_file)
       let s:state.temp_data_file = ''
+    endif
+
+    " If footer was added, update it to show cancellation
+    if s:state.footer_added
+      let l:last_line = line('$')
+      let l:rand_index = rand() % len(s:ui.final_emoticons)
+      let l:final_emoticon = s:ui.final_emoticons[l:rand_index]
+      call setline(l:last_line, l:final_emoticon . s:ui.footer_base . ' <CLAUDIA ABRT>')
     endif
 
     " Stop thinking animation
