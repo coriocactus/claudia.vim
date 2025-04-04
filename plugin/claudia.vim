@@ -42,8 +42,6 @@ let s:state = {
 
 " Context namespace - manages file contexts
 let s:context = {
-      \ 'entries': [],
-      \ 'next_id': 1,
       \ 'cache': {}
       \ }
 
@@ -83,26 +81,12 @@ function! s:init_config() abort
   " Start with defaults
   let s:config.effective = copy(s:config.defaults)
 
-  " Load user config if provided
-  if exists('g:claudia_config')
-    call extend(s:config.user, g:claudia_config)
-  endif
-
-  " Apply user config over defaults
-  call extend(s:config.effective, s:config.user)
-
-  " Initialize g:claudia_config for backward compatibility
-  let g:claudia_config = s:config.effective
-
   " Load system prompt from file if available
   call s:load_system_prompt()
 
   " Apply any user-specific config
   let l:user_config = get(g:, 'claudia_user_config', {})
   call extend(s:config.effective, l:user_config)
-
-  " Update global variable for compatibility
-  let g:claudia_config = s:config.effective
 
   " Set reasoning mode to default
   call s:set_reasoning_mode(0)
@@ -309,7 +293,6 @@ function! s:set_temperature(temp) abort
   let l:temp_float = str2float(a:temp)
   if l:temp_float >= 0.0 && l:temp_float <= 1.0
     let s:config.effective.temperature = l:temp_float
-    let g:claudia_config.temperature = l:temp_float
     echo "claudia temperature set to " . a:temp
   else
     echoerr "Temperature must be between 0.0 and 1.0"
@@ -320,7 +303,6 @@ endfunction
 function! s:set_max_tokens(tokens) abort
   let l:tokens_nr = str2nr(a:tokens)
   let s:config.effective.max_tokens = l:tokens_nr
-  let g:claudia_config.max_tokens = l:tokens_nr
   echo "claudia max tokens set to " . a:tokens
 endfunction
 
@@ -331,7 +313,6 @@ function! s:set_system_prompt(input) abort
     try
       let l:content = join(readfile(l:filepath), "\n")
       let s:config.effective.system_prompt = l:content
-      let g:claudia_config.system_prompt = l:content
       call s:debug_log("Loaded system prompt from " . l:filepath)
       echo "System prompt loaded from " . l:filepath . " (" . len(l:content) . " chars)"
     catch
@@ -340,7 +321,6 @@ function! s:set_system_prompt(input) abort
     endtry
   else
     let s:config.effective.system_prompt = a:input
-    let g:claudia_config.system_prompt = a:input
     echo "System prompt set to " . a:input
   endif
 endfunction
@@ -351,24 +331,18 @@ function! s:set_reasoning_mode(level) abort
   if l:level == 0
     let s:config.reasoning_level = 0
     let s:config.effective.max_tokens = 8192
-    let g:claudia_config.max_tokens = 8192
     let s:config.effective.temperature = s:config.saved_temperature
-    let g:claudia_config.temperature = s:config.saved_temperature
   elseif l:level == 1
     let s:config.saved_temperature = s:config.effective.temperature
     let s:config.reasoning_level = 1
     let s:config.effective.max_tokens = 64000
-    let g:claudia_config.max_tokens = 64000
     let s:config.effective.temperature = 1.0
-    let g:claudia_config.temperature = 1.0
     echo "Extended thinking enabled (level 1). Using 64K max tokens with 16K thinking budget."
   elseif l:level == 2
     let s:config.saved_temperature = s:config.effective.temperature
     let s:config.reasoning_level = 2
     let s:config.effective.max_tokens = 128000
-    let g:claudia_config.max_tokens = 128000
     let s:config.effective.temperature = 1.0
-    let g:claudia_config.temperature = 1.0
     echo "Extended thinking enabled (level 2). Using 128K max tokens with 32K thinking budget."
   else
     echoerr "Invalid reasoning level. Please use 0 (disabled), 1 (medium), or 2 (heavy)."
@@ -380,25 +354,37 @@ endfunction
 "-----------------------------------------------------------------------------
 
 " Update the next context ID
+" Operates on the current buffer's context.
 function! s:update_next_context_id() abort
+  let l:ctx = s:get_buffer_context()
   " If no contexts exist, reset to 1
-  if empty(s:context.entries)
-    let s:context.next_id = 1
+  if empty(l:ctx.entries)
+    let l:ctx.next_id = 1
     return
   endif
 
   " Find highest existing ID and set next_context_id to one more than that
   let l:max_id = 0
-  for entry in s:context.entries
+  for entry in l:ctx.entries
     if entry.id > l:max_id
       let l:max_id = entry.id
     endif
   endfor
-  let s:context.next_id = l:max_id + 1
+  let l:ctx.next_id = l:max_id + 1
+endfunction
+
+" Get or initialize buffer-local context
+function! s:get_buffer_context() abort
+  if !exists('b:claudia_context')
+    let b:claudia_context = {'entries': [], 'next_id': 1}
+    call s:debug_log("Initialized context for buffer " . bufnr('%'))
+  endif
+  return b:claudia_context
 endfunction
 
 " Add a file to the context
 function! s:add_context(filepath) abort
+  let l:ctx = s:get_buffer_context()
   " Expand filepath to handle ~ and environment variables
   let l:expanded_path = expand(a:filepath)
 
@@ -430,29 +416,30 @@ function! s:add_context(filepath) abort
 
   " Create context entry
   let l:entry = {
-        \ 'id': s:context.next_id,
+        \ 'id': l:ctx.next_id,
         \ 'filepath': a:filepath,
         \ 'expanded_path': l:expanded_path,
         \ 'type': l:type,
         \ 'media_type': l:media_type
         \ }
 
-  call add(s:context.entries, l:entry)
-  let s:context.next_id += 1
+  call add(l:ctx.entries, l:entry)
+  let l:ctx.next_id += 1
 
   let l:type_str = l:type ==# 'media' ? ' as ' . l:media_type : ''
-  echo "Added context from " . a:filepath . l:type_str . " with ID " . (s:context.next_id - 1)
+  echo "Added context (buffer " . bufnr('%') . ") from " . a:filepath . l:type_str . " with ID " . (l:ctx.next_id - 1)
 endfunction
 
 " Show all context entries
 function! s:show_context() abort
-  if empty(s:context.entries)
-    echo "No context entries"
+  let l:ctx = s:get_buffer_context()
+  if empty(l:ctx.entries)
+    echo "No context entries for buffer " . bufnr('%')
     return
   endif
 
-  echo "Context Entries:"
-  for entry in s:context.entries
+  echo "Context Entries for buffer " . bufnr('%') . ":"
+  for entry in l:ctx.entries
     let l:type_str = entry.type ==# 'media' ? ' [' . entry.media_type . ']' : ''
     let l:cache_str = has_key(s:context.cache, entry.id) ? ' (cached)' : ''
     echo printf("ID: %d, File: %s%s%s", entry.id, entry.filepath, l:type_str, l:cache_str)
@@ -461,40 +448,40 @@ endfunction
 
 " Remove a context by ID
 function! s:remove_context(id) abort
+  let l:ctx = s:get_buffer_context()
   let l:id = str2nr(a:id)
   let l:index = -1
   let l:removed_filepath = ''
 
   " Find entry with matching ID and store its filepath
-  for i in range(len(s:context.entries))
-    if s:context.entries[i].id == l:id
+  for i in range(len(l:ctx.entries))
+    if l:ctx.entries[i].id == l:id
       let l:index = i
-      let l:removed_filepath = s:context.entries[i].filepath
+      let l:removed_filepath = l:ctx.entries[i].filepath
       break
     endif
   endfor
 
   if l:index >= 0
-    " Remove from cache if present
     if has_key(s:context.cache, l:id)
       unlet s:context.cache[l:id]
     endif
-    " Remove from contexts
-    call remove(s:context.entries, l:index)
-    " Update next_context_id
+    call remove(l:ctx.entries, l:index)
+    " Update next_context_id for this buffer
     call s:update_next_context_id()
-    echo "Removed context " . l:id . " (" . l:removed_filepath . ")"
+    echo "Removed context " . l:id . " (" . l:removed_filepath . ") from buffer " . bufnr('%')
   else
-    echoerr "No context found with ID " . l:id
+    echoerr "No context found with ID " . l:id . " in buffer " . bufnr('%')
   endif
 endfunction
 
 " Clear all contexts
 function! s:clear_context() abort
-  let s:context.entries = []
-  let s:context.next_id = 1
-  let s:context.cache = {}
-  echo "Cleared all context entries and cache"
+  let l:ctx = s:get_buffer_context()
+  let l:ctx.entries = []
+  let l:ctx.next_id = 1
+  " Global cache is NOT cleared by this command, use ClaudiaClearCache for that
+  echo "Cleared all context entries for buffer " . bufnr('%')
 endfunction
 
 " Load a file with progress indication
@@ -539,10 +526,10 @@ endfunction
 
 " Cache a context file
 function! s:cache_context(id) abort
+  let l:ctx = s:get_buffer_context()
   let l:entry = v:null
 
-  " Find context entry
-  for e in s:context.entries
+  for e in l:ctx.entries
     if e.id == str2nr(a:id)
       let l:entry = e
       break
@@ -550,7 +537,7 @@ function! s:cache_context(id) abort
   endfor
 
   if l:entry is v:null
-    echoerr "No context found with ID " . a:id
+    echoerr "No context found with ID " . a:id . " in buffer " . bufnr('%')
     return
   endif
 
@@ -558,7 +545,7 @@ function! s:cache_context(id) abort
     echo "Caching content from " . l:entry.filepath . "..."
     let l:content = s:load_file_with_progress(l:entry.expanded_path, l:entry.type)
     let s:context.cache[a:id] = l:content
-    echo "Successfully cached content from " . l:entry.filepath
+    echo "Successfully cached content from " . l:entry.filepath . " (ID " . a:id . ")"
   catch
     echoerr "Failed to cache content from " . l:entry.filepath . ": " . v:exception
   endtry
@@ -566,11 +553,11 @@ endfunction
 
 " Remove a context from cache
 function! s:uncache_context(id) abort
+  let l:ctx = s:get_buffer_context()
   let l:id = str2nr(a:id)
   let l:filepath = ''
 
-  " Find entry with matching ID and store its filepath
-  for entry in s:context.entries
+  for entry in l:ctx.entries
     if entry.id == l:id
       let l:filepath = entry.filepath
       break
@@ -578,11 +565,16 @@ function! s:uncache_context(id) abort
   endfor
 
   if empty(l:filepath)
-    echoerr "No context found with ID " . l:id
+    " Check if the ID exists in cache even if not in current buffer's context
+    if has_key(s:context.cache, l:id)
+      unlet s:context.cache[l:id]
+      echo "Uncached context " . l:id . " (file path unknown from this buffer)"
+    else
+      echoerr "No context found with ID " . l:id . " in buffer " . bufnr('%') . " or cache"
+    endif
     return
   endif
 
-  " Remove from cache if present
   if has_key(s:context.cache, l:id)
     unlet s:context.cache[l:id]
     echo "Uncached context " . l:id . " (" . l:filepath . ")"
@@ -594,7 +586,7 @@ endfunction
 " Clear all cached contexts
 function! s:clear_cache() abort
   let s:context.cache = {}
-  echo "Cleared context cache"
+  echo "Cleared global context cache"
 endfunction
 
 "-----------------------------------------------------------------------------
@@ -713,7 +705,7 @@ function! s:get_visual_selection() abort
     let l:lines[-1] = l:lines[-1][: l:column_end - 1]
     let l:lines[0] = l:lines[0][l:column_start - 1:]
   elseif visualmode() ==# 'V'
-    " Line-wise visual mode - no modification needed
+  " Line-wise visual mode - no modification needed
   elseif visualmode() ==# "\<C-V>"
     let l:new_lines = []
     for l:line in l:lines
@@ -810,7 +802,8 @@ endfunction
 
 " Prepare API request arguments
 function! s:make_anthropic_curl_args(prompt) abort
-  call s:debug_log("Preparing API request with " . len(s:context.entries) . " context entries")
+  let l:ctx = s:get_buffer_context()
+  call s:debug_log("Preparing API request with " . len(l:ctx.entries) . " context entries for buffer " . bufnr('%'))
 
   " Validate API key
   let l:api_key = s:get_api_key(s:config.effective.api_key_name)
@@ -823,9 +816,10 @@ function! s:make_anthropic_curl_args(prompt) abort
   " Prepare content blocks
   let l:content_blocks = []
 
-  " Process context entries first
-  for entry in s:context.entries
+  " Process context entries first from the current buffer's context
+  for entry in l:ctx.entries
     try
+      " Cache check uses global cache but ID comes from buffer context
       let l:content = has_key(s:context.cache, entry.id)
             \ ? s:context.cache[entry.id]
             \ : s:load_file_with_progress(entry.expanded_path, entry.type)
@@ -1150,6 +1144,7 @@ endfunction
 
 " Trigger claudia from normal mode
 function! s:trigger_claudia() abort
+  let l:ctx = s:get_buffer_context()
   call s:reset_state()
   let s:state.original_cursor_pos = getpos('.')
 
@@ -1219,6 +1214,7 @@ endfunction
 
 " Trigger claudia from visual mode
 function! s:trigger_visual() abort
+  let l:ctx = s:get_buffer_context()
   let s:state.from_visual_mode = 1
   call s:trigger_claudia()
 endfunction
