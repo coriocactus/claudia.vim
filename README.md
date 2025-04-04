@@ -1,5 +1,7 @@
 # claudia.vim
 
+![demo](./claudia.gif)
+
 ## Credit
 
 This project is a vim rewrite of the following projects:
