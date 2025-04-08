@@ -630,13 +630,18 @@ function! s:animate_thinking(timer) abort
     return
   endif
 
-  " Update dots animation
+  " Get the commentstring for the current buffer
+  let l:commentformat = &commentstring
+  if empty(l:commentformat)
+    let l:commentformat = " %s"
+  endif
+
   let s:state.dots_state = (s:state.dots_state + 1) % 4
+  let l:thinking_text = s:state.current_thinking_word . repeat('.', s:state.dots_state)
+  let l:comment = substitute(l:commentformat, '%s', l:thinking_text, '')
 
   " Update line with new thinking animation
-  let l:current_line = getline('.')
-  let l:cleaned_line = substitute(l:current_line, s:state.current_thinking_word . '\.*$', '', '')
-  call setline('.', l:cleaned_line . s:state.current_thinking_word . repeat('.', s:state.dots_state))
+  call setline('.', l:comment)
   redraw
 endfunction
 
@@ -646,9 +651,7 @@ function! s:stop_thinking_animation() abort
     call timer_stop(s:state.thinking_timer)
     let s:state.thinking_timer = v:null
     " Clean up thinking text
-    let l:current_line = getline('.')
-    let l:cleaned_line = substitute(l:current_line, s:state.current_thinking_word . '\.*$', '', '')
-    call setline('.', l:cleaned_line)
+    call setline('.', '')
   endif
 endfunction
 
@@ -1255,8 +1258,12 @@ function! s:trigger_replace() abort
   " Build prompt with context
   let l:filetype_context = empty(&filetype) ? '' : "Filetype: " . &filetype . "\n\n"
   let l:instruction = "Follow the instructions in the code comments. " .
-        \ "Generate code only. Think step by step. If you must speak, do so in comments. " .
-        \ "Assume you are writing directly to source: No file reference required. No backticks codeblock required."
+        \ "You are writing directly to source code. " .
+        \ "Generate code only and directly. " .
+        \ "No file reference required. " .
+        \ "No signposting required. " .
+        \ "No backticks codeblock required." .
+        \ "If you must provide explanations, do so in comments specific to the filetype. "
   let l:prompt = l:filetype_context . l:instruction . "\n\n" . l:selection
 
   " Start thinking animation
