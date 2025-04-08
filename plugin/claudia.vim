@@ -125,7 +125,6 @@ function! s:reset_state() abort
   let s:state.emoticon_index = 0
   let s:state.footer_added = 0
   let s:state.footer_line_nr = 0
-  let s:state.from_visual_mode = 0
   let s:state.replace_mode = 0
 
   " Clean up temporary data file if it exists
@@ -807,7 +806,7 @@ function! s:write_string_at_cursor(str) abort
   " Handle viewport centering
   if s:state.replace_mode
     normal! zz
-  elseif s:state.footer_line_nr > 0
+  else
     call s:center_line(s:state.footer_line_nr)
   endif
 
@@ -1114,11 +1113,9 @@ function! s:job_exit_callback(job, status)
 
   " Position cursor depending on mode
   if s:state.replace_mode
-    " For replace mode, stay at current position and center viewport
     normal! zz$
     call append('.', '')
-  elseif s:state.footer_line_nr > 0
-    " For normal mode, move to the line below footer
+  else
     call cursor(s:state.footer_line_nr, 1)
     normal! j0
   endif
