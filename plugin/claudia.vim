@@ -37,7 +37,8 @@ let s:state = {
       \ 'thinking_content': '',
       \ 'emoticon_index': 0,
       \ 'footer_added': 0,
-      \ 'footer_line_nr': 0
+      \ 'footer_line_nr': 0,
+      \ 'replace_mode': 0
       \ }
 
 " Context namespace - manages file contexts
@@ -124,6 +125,8 @@ function! s:reset_state() abort
   let s:state.emoticon_index = 0
   let s:state.footer_added = 0
   let s:state.footer_line_nr = 0
+  let s:state.from_visual_mode = 0
+  let s:state.replace_mode = 0
 
   " Clean up temporary data file if it exists
   if !empty(s:state.temp_data_file) && filereadable(s:state.temp_data_file)
@@ -605,13 +608,15 @@ function! s:start_thinking_animation() abort
   let l:rand_index = rand() % len(s:thinking_states)
   let s:state.current_thinking_word = s:thinking_states[l:rand_index]
 
-  " Add the header for the claudia response
-  call append('.', s:ui.header)
-  normal! j
-  call append('.', '')
-  normal! j
-  call append('.', '')
-  normal! j
+  " Add the header for the claudia response (skip in replace mode)
+  if !s:state.replace_mode
+    call append('.', s:ui.header)
+    normal! j
+    call append('.', '')
+    normal! j
+    call append('.', '')
+    normal! j
+  endif
 
   " Start timer for animation
   let s:state.thinking_timer = timer_start(400, 's:animate_thinking', {'repeat': -1})
@@ -746,8 +751,8 @@ function! s:write_string_at_cursor(str) abort
   let l:current_pos = getpos('.')
   let l:current_line = getline('.')
 
-  " Add footer if not already added and response has started
-  if s:state.response_started && !s:state.footer_added
+  " Add footer if not already added and response has started (skip in replace mode)
+  if s:state.response_started && !s:state.footer_added && !s:state.replace_mode
     let s:state.footer_added = 1
 
     " Remember current position
@@ -796,7 +801,13 @@ function! s:write_string_at_cursor(str) abort
     call cursor(l:new_line, len(getline(l:new_line)))
   endif
 
-  call s:center_line(s:state.footer_line_nr)
+  " Handle viewport centering
+  if s:state.replace_mode
+    normal! zz
+  elseif s:state.footer_line_nr > 0
+    call s:center_line(s:state.footer_line_nr)
+  endif
+
   redraw
 endfunction
 
@@ -1091,16 +1102,23 @@ function! s:job_exit_callback(job, status)
     let s:state.thinking_timer = v:null
   endif
 
-  " Update footer with completion status
-  if s:state.footer_added && s:state.footer_line_nr > 0
+  " Update footer with completion status (skip in replace mode)
+  if !s:state.replace_mode && s:state.footer_added && s:state.footer_line_nr > 0
     let l:rand_index = rand() % len(s:ui.final_emoticons)
     let l:final_emoticon = s:ui.final_emoticons[l:rand_index]
     call setline(s:state.footer_line_nr, l:final_emoticon . s:ui.footer_base . ' ' . s:ui.term_tag)
   endif
 
-  " Move cursor to position 1 of line below footer
-  call cursor(s:state.footer_line_nr, 1)
-  normal! j0
+  " Position cursor depending on mode
+  if s:state.replace_mode
+    " For replace mode, stay at current position and center viewport
+    normal! zz$
+    call append('.', '')
+  elseif s:state.footer_line_nr > 0
+    " For normal mode, move to the line below footer
+    call cursor(s:state.footer_line_nr, 1)
+    normal! j0
+  endif
 
   let s:state.active_job = v:null
   if hasmapto('s:cancel_job')
@@ -1219,6 +1237,79 @@ function! s:trigger_visual() abort
   call s:trigger_claudia()
 endfunction
 
+" Trigger claudia in replace mode from visual selection
+function! s:trigger_replace() abort
+  let l:ctx = s:get_buffer_context()
+  call s:reset_state()
+  let s:state.replace_mode = 1
+
+  " Store visual selection range for cursor positioning
+  let s:state.original_cursor_pos = getpos("'<")
+
+  " Get the content to be replaced
+  let l:selection = s:get_visual_selection()
+
+  " Delete the visual selection
+  normal! gvd
+
+  " Build prompt with context
+  let l:filetype_context = empty(&filetype) ? '' : "Filetype: " . &filetype . "\n\n"
+  let l:instruction = "Follow the instructions in the code comments. " .
+        \ "Generate code only. Think step by step. If you must speak, do so in comments. " .
+        \ "Assume you are writing directly to source: No file reference required. No backticks codeblock required."
+  let l:prompt = l:filetype_context . l:instruction . "\n\n" . l:selection
+
+  " Start thinking animation
+  call s:start_thinking_animation()
+
+  " Get curl arguments for API request
+  let l:args = s:make_anthropic_curl_args(l:prompt)
+  if empty(l:args)
+    call s:stop_thinking_animation()
+    return
+  endif
+
+  " Create a temporary file for the JSON data
+  let l:temp_file = tempname()
+  call s:debug_log("Created temp file: " . l:temp_file)
+
+  " Extract JSON data efficiently
+  let l:json_data = ''
+  let l:filtered_args = []
+  let i = 0
+  while i < len(l:args)
+    if l:args[i] ==# '-d' && i < len(l:args) - 1
+      let l:json_data = l:args[i + 1]
+      let i += 2  " Skip both -d and its value
+    else
+      call add(l:filtered_args, l:args[i])
+      let i += 1
+    endif
+  endwhile
+
+  " Write JSON data to temp file
+  call writefile([l:json_data], l:temp_file)
+  let s:state.temp_data_file = l:temp_file
+
+  " Build curl command efficiently
+  let l:curl_cmd = 'curl -N -s --no-buffer'
+  let l:arg_string = join(map(l:filtered_args, 'shellescape(v:val)'), ' ')
+  let l:curl_cmd .= ' ' . l:arg_string . ' -d @' . shellescape(l:temp_file)
+
+  call s:debug_log("Using curl command: " . l:curl_cmd . " (replace mode)")
+
+  " Execute curl in background
+  let s:state.active_job = job_start(['/bin/sh', '-c', l:curl_cmd], {
+        \ 'out_cb': 's:job_out_callback',
+        \ 'err_cb': 's:job_err_callback',
+        \ 'exit_cb': 's:job_exit_callback',
+        \ 'mode': 'raw'
+        \ })
+
+  " Allow cancellation with Escape
+  nnoremap <silent> <Esc> :call <SID>cancel_job()<CR>
+endfunction
+
 "-----------------------------------------------------------------------------
 " Command Definitions
 "-----------------------------------------------------------------------------
@@ -1261,6 +1352,12 @@ endif
 xnoremap <silent> <script> <Plug>ClaudiaTriggerVisual :<C-u>call <SID>trigger_visual()<CR>
 if !hasmapto('<Plug>ClaudiaTriggerVisual') && empty(maparg('<Leader>c', 'x'))
   xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
+endif
+
+" Define replace mode mappings
+xnoremap <silent> <script> <Plug>ClaudiaReplace :<C-u>call <SID>trigger_replace()<CR>
+if !hasmapto('<Plug>ClaudiaReplace') && empty(maparg('<Leader>x', 'x'))
+  xmap <silent> <Leader>x <Plug>ClaudiaReplace
 endif
 
 " Initialize the plugin
