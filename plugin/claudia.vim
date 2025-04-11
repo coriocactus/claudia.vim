@@ -1255,12 +1255,14 @@ function! s:trigger_replace() abort
   " Build prompt with context
   let l:filetype_context = empty(&filetype) ? '' : "Filetype: " . &filetype . "\n\n"
   let l:instruction = "Follow the instructions in the code comments. " .
-        \ "You are writing directly to source code. " .
-        \ "Generate code only and directly. " .
-        \ "No file reference required. " .
-        \ "No signposting required. " .
-        \ "No backticks codeblock required." .
-        \ "If you must provide explanations, do so in comments specific to the filetype. "
+        \ "Remember you are now writing directly to the codebase. " .
+        \ "So generate code only and directly. " .
+        \ "You must not add filepath references. " .
+        \ "You must not add imports or module references. " .
+        \ "You must not add any preamble, outline, or signpost. " .
+        \ "You must not add backticks codeblock or any markdown syntax. " .
+        \ "If you must provide explanations, do so in comments specific to the filetype. " .
+        \ "Previous code design guidelines still apply."
   let l:prompt = l:filetype_context . l:instruction . "\n\n" . l:selection
 
   " Start thinking animation
@@ -1359,9 +1361,9 @@ if !hasmapto('<Plug>ClaudiaTriggerVisual') && empty(maparg('<Leader>c', 'x'))
 endif
 
 " Define replace mode mappings
-xnoremap <silent> <script> <Plug>ClaudiaReplace :<C-u>call <SID>trigger_replace()<CR>
-if !hasmapto('<Plug>ClaudiaReplace') && empty(maparg('<Leader>x', 'x'))
-  xmap <silent> <Leader>x <Plug>ClaudiaReplace
+xnoremap <silent> <script> <Plug>ClaudiaTriggerReplace :<C-u>call <SID>trigger_replace()<CR>
+if !hasmapto('<Plug>ClaudiaTriggerReplace') && empty(maparg('<Leader>x', 'x'))
+  xmap <silent> <Leader>x <Plug>ClaudiaTriggerReplace
 endif
 
 " Initialize the plugin

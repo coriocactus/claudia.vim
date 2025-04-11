@@ -11,13 +11,18 @@ This project is a vim rewrite of the following projects:
 ## Usage (with default mappings)
 
 **1. Normal Mode:**
-- Press `<Leader>c` to send everything from the start of the document to the cursor
+- Press `<Leader>c` to send everything from the start of the buffer to the cursor
 
 **2. Visual Mode:**
 - Select text (using v, V, or Ctrl-V)
 - Press `<Leader>c` to send only the selected text
 
-**3. To cancel a response:**
+**3. Replace Mode:**
+- Add rewrite instructions as comments
+- Select text with rewrite instructions (using v, V, or Ctrl-V)
+- Press `<Leader>x` to send selected text to be rewritten by claudia
+
+**4. To cancel a response:**
 - Press `Esc` while claudia is responding
 
 ## Getting Started
@@ -67,7 +72,8 @@ are read fresh on each query, so edits to context files take effect
 immediately. Cached context are read and stored in memory (and [prompt
 cached](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).)
 Avoid caching frequently edited files since changes won't be reflected until
-re-cached.
+re-cached. Each set of context files are tied to the buffer in which they were
+added.
 
 ## Extended Reasoning Mode
 
@@ -95,6 +101,10 @@ nmap <silent> <Leader>c <Plug>ClaudiaTrigger
 " Visual mode - uses selected text
 " This is NOT mapped out of the box if your Visual mode <Leader>c is already in use
 xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
+
+" Replace mode - replaces selected text according to rewrite instructions
+" This is NOT mapped out of the box if your Visual mode <Leader>x is already in use
+xmap <silent> <Leader>x <Plug>ClaudiaTriggerReplace
 
 " API configurations
 " - api_key_name: Environment variable containing your API key
