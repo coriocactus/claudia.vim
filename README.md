@@ -1,5 +1,6 @@
 # claudia.vim
 
+normal mode, visual mode, replace mode
 ![demo](./claudia.gif)
 
 ## Credit
