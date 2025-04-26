@@ -38,7 +38,9 @@ let s:state = {
       \ 'emoticon_index': 0,
       \ 'footer_added': 0,
       \ 'footer_line_nr': 0,
-      \ 'replace_mode': 0
+      \ 'insertion_line_nr': 0,
+      \ 'replace_mode': 0,
+      \ 'follow_footer_mode': 0
       \ }
 
 " Context namespace - manages file contexts
@@ -125,7 +127,9 @@ function! s:reset_state() abort
   let s:state.emoticon_index = 0
   let s:state.footer_added = 0
   let s:state.footer_line_nr = 0
+  let s:state.insertion_line_nr = 0
   let s:state.replace_mode = 0
+  let s:state.follow_footer_mode = 0
 
   " Clean up temporary data file if it exists
   if !empty(s:state.temp_data_file) && filereadable(s:state.temp_data_file)
@@ -617,8 +621,12 @@ function! s:start_thinking_animation() abort
     normal! j
   endif
 
+  " Set the insertion line *after* potential header addition and cursor movement
+  let s:state.insertion_line_nr = line('.')
+  call s:debug_log("Set initial insertion line: " . s:state.insertion_line_nr)
+
   " Start timer for animation
-  let s:state.thinking_timer = timer_start(400, 's:animate_thinking', {'repeat': -1})
+  let s:state.thinking_timer = timer_start(100, 's:animate_thinking', {'repeat': -1})
 endfunction
 
 " Update the thinking animation
@@ -627,6 +635,14 @@ function! s:animate_thinking(timer) abort
   if s:state.response_started || s:state.active_job == v:null
     call s:stop_thinking_animation()
     return
+  endif
+
+  " Ensure we operate on the correct line, independent of user cursor
+  let l:target_line = s:state.insertion_line_nr
+  if l:target_line <= 0 || l:target_line > line('$')
+     call s:debug_log("Animate thinking: Invalid target line " . l:target_line)
+     call s:stop_thinking_animation()
+     return
   endif
 
   " Get the commentstring for the current buffer
@@ -639,8 +655,11 @@ function! s:animate_thinking(timer) abort
   let l:thinking_text = s:state.current_thinking_word . repeat('.', s:state.dots_state)
   let l:comment = substitute(l:commentformat, '%s', l:thinking_text, '')
 
-  " Update line with new thinking animation
-  call setline('.', l:comment)
+  " Save user cursor, update line, restore cursor
+  let l:saved_user_cursor = getpos('.')
+  call setline(l:target_line, l:comment)
+  call setpos('.', l:saved_user_cursor)
+
   redraw
 endfunction
 
@@ -649,8 +668,18 @@ function! s:stop_thinking_animation() abort
   if s:state.thinking_timer != v:null
     call timer_stop(s:state.thinking_timer)
     let s:state.thinking_timer = v:null
-    " Clean up thinking text
-    call setline('.', '')
+
+    " Clean up thinking text from the correct line
+    let l:target_line = s:state.insertion_line_nr
+    if l:target_line > 0 && l:target_line <= line('$')
+        " Save user cursor, update line, restore cursor
+        let l:saved_user_cursor = getpos('.')
+        call setline(l:target_line, '')
+        call setpos('.', l:saved_user_cursor)
+        redraw " Ensure cleanup is visible
+    else
+        call s:debug_log("Stop thinking: Invalid target line " . l:target_line . " for cleanup.")
+    endif
   endif
 endfunction
 
@@ -686,13 +715,16 @@ function! s:animate_footer(timer) abort
   " Redraw and restore cursor
   redraw
   call setpos('.', l:save_pos)
+
+  " If follow mode is active, continuously center the view on the footer
+  if s:state.follow_footer_mode
+      call s:center_line(l:footer_line)
+  endif
 endfunction
 
 function! s:center_line(line_number)
-  let current_pos = getpos('.')
   call cursor(a:line_number, 1)
   normal! zz
-  call setpos('.', current_pos)
 endfunction
 
 " Get all lines up to the cursor
@@ -724,16 +756,23 @@ function! s:get_visual_selection() abort
   return join(l:lines, "\n")
 endfunction
 
-" Write a string at the cursor position
+" Write a string relative to the initial insertion point, independent of user cursor.
 function! s:write_string_at_cursor(str) abort
+  " Save user's current cursor position, restore at the end.
+  let l:saved_user_cursor = getpos('.')
+  let l:cursor_moved = 0 " Flag to track if we need to restore cursor
+
   " Initialize if this is the first write
   if !s:state.response_started
     let s:state.response_started = 1
     call s:stop_thinking_animation()
 
+    " Original cursor position should already be set by the trigger function
     if empty(s:state.original_cursor_pos)
-      let s:state.original_cursor_pos = getpos('.')
+       call s:debug_log("Warning: Original cursor pos was not set before first write.")
+       let s:state.original_cursor_pos = getpos('.') " Fallback, might be inaccurate
     endif
+    " Insertion line is now set correctly in s:start_thinking_animation
   endif
 
   " Quick exit for empty strings
@@ -749,68 +788,91 @@ function! s:write_string_at_cursor(str) abort
   " Split into lines
   let l:lines = split(l:normalized, '\n', 1)
 
-  " Get current position and add content
-  let l:current_pos = getpos('.')
-  let l:current_line = getline('.')
-
+  " --- Footer Addition ---
   " Add footer if not already added and response has started (skip in replace mode)
   if s:state.response_started && !s:state.footer_added && !s:state.replace_mode
     let s:state.footer_added = 1
 
-    " Remember current position
-    let l:content_pos = getpos('.')
+    " Footer goes after the current insertion line
+    let l:footer_insert_line = s:state.insertion_line_nr
 
-    " Add empty lines and footer
-    call append('.', ['', ''])
+    " Add empty lines and footer line placeholder
+    call append(l:footer_insert_line, ['', ''])
+    let l:cursor_moved = 1 " append() moves the cursor
 
-    " Calculate footer line number (2 lines after current position)
-    let s:state.footer_line_nr = l:content_pos[1] + 2
+    " Calculate footer line number
+    let s:state.footer_line_nr = l:footer_insert_line + 2
 
-    " Create footer with initial emoticon and loading tag
+    " Create footer content
     let l:emoticon = s:ui.active_emoticons[s:state.emoticon_index]
     let l:loading_tag = s:ui.loading_tags[s:state.dots_state]
     let l:footer = l:emoticon . s:ui.footer_base . ' ' . l:loading_tag
 
-    " Add footer line
-    call append(l:content_pos[1] + 1, l:footer)
+    " Set the footer line content (line was already added)
+    call setline(s:state.footer_line_nr, l:footer)
 
     " Start footer animation timer
     if s:state.thinking_timer == v:null
-      let s:state.thinking_timer = timer_start(400, 's:animate_footer', {'repeat': -1})
+      let s:state.thinking_timer = timer_start(200, 's:animate_footer', {'repeat': -1})
     endif
-
-    " Move cursor back to content position
-    call cursor(l:content_pos[1], l:content_pos[2])
   endif
 
-  " Special case for single line without newlines (common case)
-  if len(l:lines) == 1
-    call setline('.', l:current_line . l:lines[0])
-    call cursor(l:current_pos[1], len(getline('.')))
+  " --- Insertion Logic ---
+  let l:target_line = s:state.insertion_line_nr
+  " Ensure target line is valid
+  if l:target_line <= 0 || l:target_line > line('$')
+    call s:debug_log("Error: Invalid insertion line: " . l:target_line)
+    " Restore cursor if we moved it during footer add
+    if l:cursor_moved | call setpos('.', l:saved_user_cursor) | endif
+    return
+  endif
+  let l:current_line_content = getline(l:target_line)
+
+  " Append/Insert the new content lines
+  if len(l:lines) == 0 " Should not happen with split(..., 1), but check anyway
+      " No content lines to add
+  elseif len(l:lines) == 1
+    " Single line: Append to the current insertion line
+    call setline(l:target_line, l:current_line_content . l:lines[0])
+    let l:cursor_moved = 1 " setline() might move cursor if line number matches current line
+    " No need to update insertion_line_nr for single-line append
   else
-    " Multi-line case
-    call setline('.', l:current_line . l:lines[0])
-    call append('.', l:lines[1:])
+    " Multi-line: Append first part to current line
+    call setline(l:target_line, l:current_line_content . l:lines[0])
+    let l:cursor_moved = 1
 
-    " If footer exists, update its line number based on added lines
-    if s:state.footer_added
-      let s:state.footer_line_nr = s:state.footer_line_nr + len(l:lines) - 1
-    endif
+    " --- Multi-line handling with line-by-line centering ---
+    let l:lines_inserted = 0
+    let l:current_append_line = l:target_line " Start appending after the line we just modified
+    for l:line_to_append in l:lines[1:]
+      call append(l:current_append_line, l:line_to_append)
+      let l:lines_inserted += 1
+      let l:current_append_line += 1
+      let l:cursor_moved = 1 " append() moves the cursor
 
-    " Update cursor position
-    let l:line_offset = l:current_pos[1] - s:state.original_cursor_pos[1]
-    let l:new_line = s:state.original_cursor_pos[1] + l:line_offset + len(l:lines) - 1
-    call cursor(l:new_line, len(getline(l:new_line)))
+      " Update footer line number immediately as it shifts down
+      if s:state.footer_added
+        let s:state.footer_line_nr += 1
+      endif
+
+      " If follow mode is active, redraw and center *after adding this single line*
+      if s:state.follow_footer_mode && s:state.footer_added
+        redraw " Force redraw to show the newly added line
+        call s:center_line(s:state.footer_line_nr)
+      endif
+    endfor
+
+    " Update the main insertion line number for the *next* write after all lines are added
+    let s:state.insertion_line_nr += l:lines_inserted
   endif
 
-  " Handle viewport centering
+  " --- Viewport and Cursor ---
+  " Handle viewport centering ONLY in replace mode. Follow mode centering is handled above or by timer.
   if s:state.replace_mode
     normal! zz
-  else
-    call s:center_line(s:state.footer_line_nr)
   endif
 
-  redraw
+  redraw " Final redraw to ensure screen is up-to-date after the chunk is processed.
 endfunction
 
 " Prepare API request arguments
@@ -1121,8 +1183,11 @@ function! s:job_exit_callback(job, status)
   endif
 
   let s:state.active_job = v:null
-  if hasmapto('s:cancel_job')
-    silent! nunmap <Esc>
+  if hasmapto('<SID>cancel_job')
+    silent! nunmap <buffer> <Esc>
+  endif
+  if maparg('q', 'n') =~# 'toggle_follow_footer_mode'
+    silent! nunmap <buffer> q
   endif
   call s:reset_state()
 endfunction
@@ -1130,10 +1195,16 @@ endfunction
 " Cancel the current job
 function! s:cancel_job()
   if s:state.active_job != v:null
+    call s:debug_log("Cancelling job...")
     call job_stop(s:state.active_job)
     let s:state.active_job = v:null
-    if hasmapto('s:cancel_job')
-      silent! nunmap <Esc>
+
+    " Remove mappings
+    if hasmapto('<SID>cancel_job')
+      silent! nunmap <buffer> <Esc>
+    endif
+    if maparg('q', 'n') =~# 'toggle_follow_footer_mode'
+      silent! nunmap <buffer> q
     endif
 
     " Clean up temporary data file if it exists
@@ -1153,6 +1224,28 @@ function! s:cancel_job()
     " Stop thinking animation
     call s:stop_thinking_animation()
     call s:reset_state()
+  endif
+endfunction
+
+"-----------------------------------------------------------------------------
+" User Interaction Functions
+"-----------------------------------------------------------------------------
+
+" Toggle the footer following mode
+function! s:toggle_follow_footer_mode() abort
+  if s:state.active_job == v:null
+    echo "Claudia is not active."
+    return
+  endif
+
+  let s:state.follow_footer_mode = !s:state.follow_footer_mode
+  echo "Claudia: Follow footer mode " . (s:state.follow_footer_mode ? "enabled" : "disabled")
+
+  " If enabling, move cursor to footer and center view immediately
+  if s:state.follow_footer_mode && s:state.footer_added && s:state.footer_line_nr > 0
+      call cursor(s:state.footer_line_nr, 1)
+      normal! zz
+      redraw
   endif
 endfunction
 
@@ -1226,8 +1319,9 @@ function! s:trigger_claudia() abort
         \ 'mode': 'raw'
         \ })
 
-  " Allow cancellation with Escape
-  nnoremap <silent> <Esc> :call <SID>cancel_job()<CR>
+  " Allow cancellation with Escape and follow toggle with q (buffer-local)
+  nnoremap <buffer> <silent> <Esc> :call <SID>cancel_job()<CR>
+  nnoremap <buffer> <silent> q :call <SID>toggle_follow_footer_mode()<CR>
 endfunction
 
 " Trigger claudia from visual mode
@@ -1312,8 +1406,9 @@ function! s:trigger_replace() abort
         \ 'mode': 'raw'
         \ })
 
-  " Allow cancellation with Escape
-  nnoremap <silent> <Esc> :call <SID>cancel_job()<CR>
+  " Allow cancellation with Escape and follow toggle with q (buffer-local)
+  nnoremap <buffer> <silent> <Esc> :call <SID>cancel_job()<CR>
+  nnoremap <buffer> <silent> q :call <SID>toggle_follow_footer_mode()<CR>
 endfunction
 
 "-----------------------------------------------------------------------------
