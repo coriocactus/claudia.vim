@@ -1176,7 +1176,6 @@ function! s:job_exit_callback(job, status)
   " Position cursor depending on mode
   if s:state.replace_mode
     normal! zz$
-    call append('.', '')
   else
     call cursor(s:state.footer_line_nr, 1)
     normal! j0
