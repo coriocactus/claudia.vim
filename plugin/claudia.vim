@@ -813,7 +813,7 @@ function! s:write_string_at_cursor(str) abort
 
     " Start footer animation timer
     if s:state.thinking_timer == v:null
-      let s:state.thinking_timer = timer_start(200, 's:animate_footer', {'repeat': -1})
+      let s:state.thinking_timer = timer_start(100, 's:animate_footer', {'repeat': -1})
     endif
   endif
 
@@ -1443,7 +1443,6 @@ command! ClaudiaShowDebugLog call s:show_debug_log()
 " Plugin Mappings
 "-----------------------------------------------------------------------------
 
-" Define plugin mappings
 nnoremap <silent> <script> <Plug>ClaudiaTrigger :call <SID>trigger_claudia()<CR>
 if !hasmapto('<Plug>ClaudiaTrigger') && empty(maparg('<Leader>c', 'n'))
   nmap <silent> <Leader>c <Plug>ClaudiaTrigger
@@ -1454,7 +1453,6 @@ if !hasmapto('<Plug>ClaudiaTriggerVisual') && empty(maparg('<Leader>c', 'x'))
   xmap <silent> <Leader>c <Plug>ClaudiaTriggerVisual
 endif
 
-" Define replace mode mappings
 xnoremap <silent> <script> <Plug>ClaudiaTriggerReplace :<C-u>call <SID>trigger_replace()<CR>
 if !hasmapto('<Plug>ClaudiaTriggerReplace') && empty(maparg('<Leader>x', 'x'))
   xmap <silent> <Leader>x <Plug>ClaudiaTriggerReplace
