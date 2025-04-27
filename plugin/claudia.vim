@@ -1233,12 +1233,12 @@ endfunction
 " Toggle the footer following mode
 function! s:toggle_follow_footer_mode() abort
   if s:state.active_job == v:null
-    echo "Claudia is not active."
+    echo "claudia is not active."
     return
   endif
 
   let s:state.follow_footer_mode = !s:state.follow_footer_mode
-  echo "Claudia: Follow footer mode " . (s:state.follow_footer_mode ? "enabled" : "disabled")
+  echo "follow claudia " . (s:state.follow_footer_mode ? "[enabled]" : "[disabled]")
 
   " If enabling, move cursor to footer and center view immediately
   if s:state.follow_footer_mode && s:state.footer_added && s:state.footer_line_nr > 0

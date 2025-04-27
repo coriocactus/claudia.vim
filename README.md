@@ -13,10 +13,12 @@ This project is a vim rewrite of the following projects:
 
 **1. Normal Mode:**
 - Press `<Leader>c` to send everything from the start of the buffer to the cursor
+- (Optional) Press `q` to follow/unfollow streaming output
 
 **2. Visual Mode:**
 - Select text (using v, V, or Ctrl-V)
 - Press `<Leader>c` to send only the selected text
+- (Optional) Press `q` to follow/unfollow streaming output
 
 **3. Replace Mode:**
 - Add rewrite instructions as comments
